@@ -1,5 +1,9 @@
 # Audio conversion sample
 
+[Project handbook](../../README.md) · [Examples](../README.md)
+
+Included files: [synthetic MP3](sample-speech.mp3) and [prepared WAV](sample-speech.wav).
+
 `sample-speech.mp3` is a short synthetic spoken recording made with Windows text-to-speech,
 not a recording or clone of a real person. `sample-speech.wav` is the converted 22.05 kHz
 mono PCM16 result. These files demonstrate conversion; use your own authorized speech
