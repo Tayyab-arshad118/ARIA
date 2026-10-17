@@ -217,7 +217,7 @@ Reference uploads accept WAV, MP3, M4A, AAC, OGG and FLAC, up to 30 minutes and 
 The backend scans the source in bounded decoded blocks and selects a 6–30 second section
 using silence and clipping checks, then converts it to 22.05 kHz mono PCM WAV before
 `/latents`. Use one clear speaker; selection does not identify or separate speakers.
-See [long audio and languages](../docs/LONG_AUDIO_AND_LANGUAGES.md) for limits and model language setup.
+See the [root project README](../README.md) for the current setup overview and model language setup.
 Neither multipart parsing nor processing writes a
 temporary reference file. With `KEEP_RAW_AUDIO=false`, the original is forgotten after
 enrollment. With it true, the **original** recording is stored as a Fernet-encrypted blob.

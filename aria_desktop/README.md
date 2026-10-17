@@ -10,7 +10,7 @@ The [Phase 5 guide](../PHASE5.md) explains the optional Verify voice and Emotion
 dialogs. Strict mode requires verification before either typed or quick-phrase speech.
 Session tokens stay in memory and are sent only in headers to the configured backend.
 
-The latest [flat design](../docs/DESIGN_UPDATE.md) uses light/dark tokens, a transparent logo,
+The latest [flat design and security notes](../UI_AND_SECURITY.md) use light/dark tokens, a transparent logo,
 status and language pills, a single message card, and a matching dark-mode toggle,
 separate Compose/Phrases views, responsive cards and phrase search. See the
 [current setup/security guide](../UI_AND_SECURITY.md) for private configuration discovery;
