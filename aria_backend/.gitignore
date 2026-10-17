@@ -1,0 +1,10 @@
+.env
+data/voices/
+data/*.sqlite*
+__pycache__/
+.pytest_cache/
+.venv/
+data/eval_models/
+data/models/
+evaluation*.csv
+evaluation*.summary.json

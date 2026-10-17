@@ -1,0 +1,7 @@
+# Optional CPU features. Install a matching CPU torch/torchaudio pair using README commands first.
+torch==2.6.0
+torchaudio==2.6.0
+audioseal==0.2.0
+speechbrain==1.0.3
+faster-whisper==1.2.1
+huggingface-hub>=0.28,<1

@@ -1,0 +1,13 @@
+name: aria_ui
+description: Presentation-only ARIA screens; connect existing controllers and callbacks.
+publish_to: none
+version: 1.0.0
+environment:
+  sdk: '>=3.9.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/aria-logo_new.png

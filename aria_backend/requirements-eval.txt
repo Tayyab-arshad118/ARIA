@@ -1,0 +1,3 @@
+# Optional; excluded from the normal backend install.
+faster-whisper>=1.1,<2
+speechbrain>=1.0,<2

@@ -1,0 +1,362 @@
+[
+  {
+    "id": "needs-1",
+    "category": "needs",
+    "roman": "mujhe pani chahiye",
+    "urdu": "مجھے پانی چاہیے"
+  },
+  {
+    "id": "needs-2",
+    "category": "needs",
+    "roman": "mujhe bhook lagi hai",
+    "urdu": "مجھے بھوک لگی ہے"
+  },
+  {
+    "id": "needs-3",
+    "category": "needs",
+    "roman": "mujhe bathroom jana hai",
+    "urdu": "مجھے باتھ روم جانا ہے"
+  },
+  {
+    "id": "needs-4",
+    "category": "needs",
+    "roman": "mujhe aram chahiye",
+    "urdu": "مجھے آرام چاہیے"
+  },
+  {
+    "id": "needs-5",
+    "category": "needs",
+    "roman": "mujhe sardi lag rahi hai",
+    "urdu": "مجھے سردی لگ رہی ہے"
+  },
+  {
+    "id": "needs-6",
+    "category": "needs",
+    "roman": "pankha chala dein",
+    "urdu": "پنکھا چلا دیں"
+  },
+  {
+    "id": "needs-7",
+    "category": "needs",
+    "roman": "darwaza khol dein",
+    "urdu": "دروازہ کھول دیں"
+  },
+  {
+    "id": "needs-8",
+    "category": "needs",
+    "roman": "batti band karein",
+    "urdu": "بتی بند کریں"
+  },
+  {
+    "id": "needs-9",
+    "category": "needs",
+    "roman": "mujhe kambal dein",
+    "urdu": "مجھے کمبل دیں"
+  },
+  {
+    "id": "needs-10",
+    "category": "needs",
+    "roman": "mujhe bitha dein",
+    "urdu": "مجھے بٹھا دیں"
+  },
+  {
+    "id": "needs-11",
+    "category": "needs",
+    "roman": "mera takiya theek karein",
+    "urdu": "میرا تکیہ ٹھیک کریں"
+  },
+  {
+    "id": "needs-12",
+    "category": "needs",
+    "roman": "mujhe ghar jana hai",
+    "urdu": "مجھے گھر جانا ہے"
+  },
+  {
+    "id": "medical-1",
+    "category": "medical",
+    "roman": "mujhe dard ho raha hai",
+    "urdu": "مجھے درد ہو رہا ہے"
+  },
+  {
+    "id": "medical-2",
+    "category": "medical",
+    "roman": "doctor ko bulayein",
+    "urdu": "ڈاکٹر کو بلائیں"
+  },
+  {
+    "id": "medical-3",
+    "category": "medical",
+    "roman": "mujhe saans lene mein mushkil hai",
+    "urdu": "مجھے سانس لینے میں مشکل ہے"
+  },
+  {
+    "id": "medical-4",
+    "category": "medical",
+    "roman": "mujhe chakkar aa rahe hain",
+    "urdu": "مجھے چکر آ رہے ہیں"
+  },
+  {
+    "id": "medical-5",
+    "category": "medical",
+    "roman": "mujhe dawa chahiye",
+    "urdu": "مجھے دوا چاہیے"
+  },
+  {
+    "id": "medical-6",
+    "category": "medical",
+    "roman": "mera sar dard kar raha hai",
+    "urdu": "میرا سر درد کر رہا ہے"
+  },
+  {
+    "id": "medical-7",
+    "category": "medical",
+    "roman": "meri tabiyat theek nahi",
+    "urdu": "میری طبیعت ٹھیک نہیں"
+  },
+  {
+    "id": "medical-8",
+    "category": "medical",
+    "roman": "nurse ko bulayein",
+    "urdu": "نرس کو بلائیں"
+  },
+  {
+    "id": "medical-9",
+    "category": "medical",
+    "roman": "mujhe bukhar hai",
+    "urdu": "مجھے بخار ہے"
+  },
+  {
+    "id": "medical-10",
+    "category": "medical",
+    "roman": "mujhe ulti aa rahi hai",
+    "urdu": "مجھے الٹی آ رہی ہے"
+  },
+  {
+    "id": "medical-11",
+    "category": "medical",
+    "roman": "ambulance bulayein",
+    "urdu": "ایمبولینس بلائیں"
+  },
+  {
+    "id": "medical-12",
+    "category": "medical",
+    "roman": "meri dawa ka waqt hai",
+    "urdu": "میری دوا کا وقت ہے"
+  },
+  {
+    "id": "family-1",
+    "category": "family",
+    "roman": "ammi ko bulayein",
+    "urdu": "امی کو بلائیں"
+  },
+  {
+    "id": "family-2",
+    "category": "family",
+    "roman": "abu ko phone karein",
+    "urdu": "ابو کو فون کریں"
+  },
+  {
+    "id": "family-3",
+    "category": "family",
+    "roman": "mere bhai ko bulayein",
+    "urdu": "میرے بھائی کو بلائیں"
+  },
+  {
+    "id": "family-4",
+    "category": "family",
+    "roman": "meri behen ko bulayein",
+    "urdu": "میری بہن کو بلائیں"
+  },
+  {
+    "id": "family-5",
+    "category": "family",
+    "roman": "mere paas baithain",
+    "urdu": "میرے پاس بیٹھیں"
+  },
+  {
+    "id": "family-6",
+    "category": "family",
+    "roman": "mujhe aap se baat karni hai",
+    "urdu": "مجھے آپ سے بات کرنی ہے"
+  },
+  {
+    "id": "family-7",
+    "category": "family",
+    "roman": "aap kab aayenge",
+    "urdu": "آپ کب آئیں گے"
+  },
+  {
+    "id": "family-8",
+    "category": "family",
+    "roman": "main aap se pyar karta hoon",
+    "urdu": "میں آپ سے پیار کرتا ہوں"
+  },
+  {
+    "id": "family-9",
+    "category": "family",
+    "roman": "sab kaise hain",
+    "urdu": "سب کیسے ہیں"
+  },
+  {
+    "id": "family-10",
+    "category": "family",
+    "roman": "mujhe ghar ki yaad aa rahi hai",
+    "urdu": "مجھے گھر کی یاد آ رہی ہے"
+  },
+  {
+    "id": "family-11",
+    "category": "family",
+    "roman": "mere dost ko bulayein",
+    "urdu": "میرے دوست کو بلائیں"
+  },
+  {
+    "id": "family-12",
+    "category": "family",
+    "roman": "mujhe akela na chorein",
+    "urdu": "مجھے اکیلا نہ چھوڑیں"
+  },
+  {
+    "id": "greetings-1",
+    "category": "greetings",
+    "roman": "assalam alaikum",
+    "urdu": "السلام علیکم"
+  },
+  {
+    "id": "greetings-2",
+    "category": "greetings",
+    "roman": "walaikum assalam",
+    "urdu": "وعلیکم السلام"
+  },
+  {
+    "id": "greetings-3",
+    "category": "greetings",
+    "roman": "aap kaise hain",
+    "urdu": "آپ کیسے ہیں"
+  },
+  {
+    "id": "greetings-4",
+    "category": "greetings",
+    "roman": "main theek hoon",
+    "urdu": "میں ٹھیک ہوں"
+  },
+  {
+    "id": "greetings-5",
+    "category": "greetings",
+    "roman": "bohat shukriya",
+    "urdu": "بہت شکریہ"
+  },
+  {
+    "id": "greetings-6",
+    "category": "greetings",
+    "roman": "khuda hafiz",
+    "urdu": "خدا حافظ"
+  },
+  {
+    "id": "greetings-7",
+    "category": "greetings",
+    "roman": "subah bakhair",
+    "urdu": "صبح بخیر"
+  },
+  {
+    "id": "greetings-8",
+    "category": "greetings",
+    "roman": "shab bakhair",
+    "urdu": "شب بخیر"
+  },
+  {
+    "id": "greetings-9",
+    "category": "greetings",
+    "roman": "aap se mil kar khushi hui",
+    "urdu": "آپ سے مل کر خوشی ہوئی"
+  },
+  {
+    "id": "greetings-10",
+    "category": "greetings",
+    "roman": "maaf karein",
+    "urdu": "معاف کریں"
+  },
+  {
+    "id": "greetings-11",
+    "category": "greetings",
+    "roman": "jee haan",
+    "urdu": "جی ہاں"
+  },
+  {
+    "id": "greetings-12",
+    "category": "greetings",
+    "roman": "jee nahi",
+    "urdu": "جی نہیں"
+  },
+  {
+    "id": "custom-1",
+    "category": "custom",
+    "roman": "ahista bolein",
+    "urdu": "آہستہ بولیں"
+  },
+  {
+    "id": "custom-2",
+    "category": "custom",
+    "roman": "dobara kahein",
+    "urdu": "دوبارہ کہیں"
+  },
+  {
+    "id": "custom-3",
+    "category": "custom",
+    "roman": "main samajh gaya",
+    "urdu": "میں سمجھ گیا"
+  },
+  {
+    "id": "custom-4",
+    "category": "custom",
+    "roman": "mujhe samajh nahi aayi",
+    "urdu": "مجھے سمجھ نہیں آئی"
+  },
+  {
+    "id": "custom-5",
+    "category": "custom",
+    "roman": "aik minute rukain",
+    "urdu": "ایک منٹ رکیں"
+  },
+  {
+    "id": "custom-6",
+    "category": "custom",
+    "roman": "meri baat sunein",
+    "urdu": "میری بات سنیں"
+  },
+  {
+    "id": "custom-7",
+    "category": "custom",
+    "roman": "mujhe likhne dein",
+    "urdu": "مجھے لکھنے دیں"
+  },
+  {
+    "id": "custom-8",
+    "category": "custom",
+    "roman": "mera phone dein",
+    "urdu": "میرا فون دیں"
+  },
+  {
+    "id": "custom-9",
+    "category": "custom",
+    "roman": "awaaz tez karein",
+    "urdu": "آواز تیز کریں"
+  },
+  {
+    "id": "custom-10",
+    "category": "custom",
+    "roman": "awaaz kam karein",
+    "urdu": "آواز کم کریں"
+  },
+  {
+    "id": "custom-11",
+    "category": "custom",
+    "roman": "mujhe waqt chahiye",
+    "urdu": "مجھے وقت چاہیے"
+  },
+  {
+    "id": "custom-12",
+    "category": "custom",
+    "roman": "main tayyar hoon",
+    "urdu": "میں تیار ہوں"
+  }
+]
