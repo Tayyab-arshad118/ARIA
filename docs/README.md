@@ -6,7 +6,18 @@ The main README is the single complete handbook. This folder contains supporting
 
 ## Contents
 
-[screenshots](screenshots/README.md) contains desktop and phone-sized UI captures. Its README describes viewport naming and links to representative screens.
+[screenshots](screenshots/) contains desktop and phone-sized UI captures. These are snapshots of several revisions, not live status or proof of model quality. Older `compose-*` images can show earlier styling.
+
+| Screen | Example |
+| --- | --- |
+| Welcome | [onboarding-welcome.png](screenshots/onboarding-welcome.png) |
+| Connection | [onboarding-connect.png](screenshots/onboarding-connect.png) |
+| Compact voice selection | [onboarding-voices-360x640.png](screenshots/onboarding-voices-360x640.png) |
+| English, light | [speak-english-light.png](screenshots/speak-english-light.png) |
+| English, dark | [speak-english-dark.png](screenshots/speak-english-dark.png) |
+| Quick phrases | [quick-phrases-phone.png](screenshots/quick-phrases-phone.png) |
+
+The `-360x640` suffix identifies a compact viewport; the flow capture helper defaults to 390 × 844. Regeneration instructions are in [desktop tests](../aria_desktop/tests/README.md). Inspect loading state, text shaping, small-window layout, and contrast before using a capture in the FYP. Do not capture credentials or private material. Screenshots do not replace accessibility testing or emotion/watermark measurements.
 
 ## Where information belongs
 

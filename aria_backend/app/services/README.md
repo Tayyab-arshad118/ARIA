@@ -41,16 +41,18 @@ The long-source scanner keeps a short suitable window, not the entire recording 
 
 Phrase audio is stored separately from general typed-speech audio. Cache hits must still pass applicable authorization and outgoing watermark processing. Do not remove language/version/reference revisions from keys just to increase hit rate.
 
-## Optional local features
+## Emotion, watermarking, and experimental verification
 
 | Module | Responsibility |
 | --- | --- |
 | [liveness.py](liveness.py) | Single-use challenges, transcript/speaker checks, expiry, voice-bound sessions. |
 | [safety_audio.py](safety_audio.py) | Bounded WAV preparation for short verification/detection workloads. |
-| [watermark.py](watermark.py) | Optional AudioSeal embedding/detection, local model handling, status reporting. |
+| [watermark.py](watermark.py) | Prototype AudioSeal embedding/detection, local model handling, status reporting; required protection is the target policy. |
 | [emotion.py](emotion.py) | Local lexicon, reference enrollment/selection, mild parameter adjustments, cache invalidation. |
 
 These features load configured local weights; API requests do not download models. Missing verification models cannot grant a session. Watermark availability is explicitly reported. Emotion tags depend on a small lexicon and recordings, not a guaranteed model control.
+
+Emotion and watermarking are core FYP requirements despite their current opt-in implementation. The watermark service currently returns raw audio on embedding failure, and cached audio is stored before watermarking. The emotion service has no per-request user override. Spoken verification can also block enrollment/communication under non-default modes. These are reviewed gaps; see [the architectural proposal and evaluation requirements](../../../README.md#chapter-20--fyp-priorities-architecture-proposal-and-evaluation), not a configuration toggle, for the intended deployment behavior.
 
 ## Change safely
 

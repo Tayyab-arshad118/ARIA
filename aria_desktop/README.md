@@ -28,9 +28,11 @@ The app defaults to local port 8001. Settings come from explicit `ARIA_APP_ENV_F
 
 ## Screens and controls
 
+The governing purpose is speech-free assistive communication. See [the FYP priorities and proposal](../README.md#chapter-20--fyp-priorities-architecture-proposal-and-evaluation) for the distinction between current prototype behavior and required accessibility/protection. Spoken liveness is experimental; it must not become a prerequisite for the primary patient workflow. Emotion and watermarking are core priorities whose existing prototypes still need evaluation and architectural changes.
+
 - **Welcome:** supplied logo, one tagline, and Get started.
 - **Connect:** Colab key and URL, optional Groq key, checked connection, and quieter Advanced/offline actions.
-- **Your voice:** saved voice selection, registration, speed, optional verification/emotion actions, fixed Continue button.
+- **Your voice:** saved voice selection, historical-recording registration, speed, flag-controlled emotion references, experimental spoken checks, and a fixed Continue button.
 - **Compose:** language selection, independent Roman/native text fields, suggestions, playback controls, and connection/error status.
 - **Phrases:** translated cards, language selection, search/filter, favorites, recents, editing, and playback.
 
@@ -53,6 +55,14 @@ Connect accepts Colab/Groq values and forwards them to the backend for checking/
 On a phone, localhost means the phone. A laptop-hosted backend needs deliberate LAN binding/auth/host/firewall setup. Responsive desktop design and build metadata are not a tested Android installation.
 
 ## Development and verification
+
+### Shared assets and font license
+
+The app's [assets directory](assets/) contains the already-transparent user-supplied [ARIA logo](assets/branding/aria-logo_new.png) and [Noto Nastaliq Urdu font](assets/fonts/NotoNastaliqUrdu.ttf). The logo appears on Welcome and in the header; it is not repeated in the voice card. Paths are relative to the asset root, with `FLET_ASSETS_DIR` available for packaged runtime locations.
+
+The font is the unmodified Google Fonts `NotoNastaliqUrdu[wght].ttf`, renamed locally. Copyright 2022 The Noto Project Authors; keep the [SIL Open Font License](assets/fonts/OFL.txt) with every redistributed copy. Its recorded SHA-256 is `98a4787f34eb6fde57fb9a1121a8f216301196ab0da98ea110cad581be8abbcd`. If unavailable, platform font fallback can change shaping/appearance. [Font source](https://github.com/google/fonts/tree/main/ofl/notonastaliqurdu)
+
+Assets are not storage for private recordings or keys. Inspect replacements in light/dark themes and at small sizes; do not stretch the logo or remove font licensing material.
 
 ### Optional Android packaging
 

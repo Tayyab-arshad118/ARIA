@@ -22,7 +22,7 @@ Without `--no-prompt`, it offers a hidden Groq-key prompt; blank keeps an existi
 .\.venv\Scripts\python.exe aria_backend/scripts/convert_audio.py "input.mp3" "reference.wav"
 ```
 
-Default source limits are 30 minutes / 256 MiB. Output is a suitable section of up to 30 seconds, not a full-length transcoding tool. The [synthetic sample](../../examples/audio/README.md) demonstrates conversion without requiring a personal recording.
+Default source limits are 30 minutes / 256 MiB. Output is a suitable section of up to 30 seconds, not a full-length transcoding tool. The [synthetic sample](../../examples/README.md) demonstrates conversion without requiring a personal recording.
 
 ## Prediction benchmark
 
@@ -76,3 +76,5 @@ Input is a JSON list like:
 `sentences.json` and `speaker.wav` are files you supply, not bundled evaluation data. Optional flags include `--backend` and `--allow-model-downloads`. Offline evaluation needs local model paths, especially `EVAL_SPEAKER_MODEL`; downloads also require effective `LOCAL_ONLY=false`. Strict speech can use `LIVENESS_SESSION_TOKEN` from evaluator settings.
 
 The current evaluator's reference normalization and expected `urdu` field are Urdu-oriented; it is not a universal multilingual benchmark. Character error rate and speaker similarity are measurements to interpret, not proof of intelligibility or clinical usefulness. Keep private references and reports out of Git.
+
+The summary includes fixed example baseline values. They are not a newly measured baseline for your dataset. The FYP needs held-out speakers, a matched baseline, listener-based emotion assessment, and marked/unmarked watermark robustness measurements. Those additional evaluation tools/results are proposed in [Chapter 20](../../README.md#chapter-20--fyp-priorities-architecture-proposal-and-evaluation) and must not be presented as already implemented.

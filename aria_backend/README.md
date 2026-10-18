@@ -14,7 +14,7 @@ This folder is the local FastAPI server. It sits between the Flet app and Colab/
 | [tests](tests/README.md) | Backend behavior and regression tests. |
 | [.env.example](.env.example) | Complete settings template with defaults and explanations. |
 | [requirements.txt](requirements.txt) | Normal runtime packages. |
-| [requirements-safety.txt](requirements-safety.txt) | Optional local verification/watermark dependencies. |
+| [requirements-safety.txt](requirements-safety.txt) | Extra dependencies for core watermarking work and experimental spoken verification. |
 | [requirements-eval.txt](requirements-eval.txt) | Optional quality-evaluation dependencies. |
 | [.gitignore](.gitignore) | Excludes runtime databases, keys/model folders, environments, and reports. |
 
@@ -31,6 +31,8 @@ Set-Location aria_backend
 Default address: `http://127.0.0.1:8001`. Run one worker; in-memory sessions, locks, and admission budgets are not shared across multiple workers. The launcher creates protected settings, whereas bare defaults permit easier local development. See [configuration](../README.md#chapter-10--settings-and-keys) before changing network exposure.
 
 ## Request flow
+
+ARIA's [assistive project priorities](../README.md#chapter-20--fyp-priorities-architecture-proposal-and-evaluation) treat emotional expression and watermarking as core requirements. Current flags/prototype behavior are not a claim that those requirements are complete. Keep experimental spoken checks separate from patient authentication and voice authorization. The handbook records the current fail-open watermark path, pre-watermark caches, strict spoken gate, and proposed replacements.
 
 1. Request guards apply authentication, origin, size, time, and admission limits.
 2. An [API handler](app/api/README.md) validates fields and coordinates work.
