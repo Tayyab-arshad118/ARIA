@@ -14,6 +14,7 @@ class GPUClient:
         self.settings = settings
         self.url = settings.colab_url
         self.key = settings.colab_api_key.get_secret_value()
+        self.model_fingerprint = None
         self.client = client or httpx.AsyncClient(follow_redirects=False, trust_env=False)
         self.semaphore = asyncio.Semaphore(settings.gpu_concurrency)
 
@@ -63,19 +64,23 @@ class GPUClient:
         data = await self.request("GET", "/health", health=True)
         if data.get("ok") is not True or data.get("lang") != self.settings.lang_tag:
             raise ServiceError(503, "Colab language/model configuration does not match the local backend")
-        return {k: data.get(k) for k in ("ok", "gpu", "lang", "languages")}
+        self.model_fingerprint = data.get("model_fingerprint")
+        return {k: data.get(k) for k in ("ok", "gpu", "lang", "languages", "model_fingerprint")}
 
     async def latents(self, wav):
         async with self.semaphore:
             result = await self.request("POST", "/latents", files={"file": ("reference.wav", wav, "audio/wav")})
         from .voice_store import validate_latents
         validate_latents(result)
-        return {k: result[k] for k in ("gpt_cond_latent", "speaker_embedding")}
+        return {**{k: result[k] for k in ("gpt_cond_latent", "speaker_embedding")},
+                **({"model_fingerprint": result["model_fingerprint"]} if result.get("model_fingerprint") else {})}
 
     async def synthesize(self, text, latents, speed, temperature=None, language=None):
         async with self.semaphore:
             result = await self.request("POST", "/synthesize", json={
-                "text": text, **latents, "speed": speed,
+                "text": text, **{k: latents[k] for k in ("gpt_cond_latent", "speaker_embedding")}, "speed": speed,
+                **({"model_fingerprint": latents.get("model_fingerprint") or self.model_fingerprint}
+                   if latents.get("model_fingerprint") or self.model_fingerprint else {}),
                 "temperature": self.settings.default_temperature if temperature is None else temperature,
                 "language": self.settings.lang_tag if language is None else language,
             })

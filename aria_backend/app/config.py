@@ -59,6 +59,13 @@ class Settings(BaseSettings):
     auth_failure_limit: int = Field(12, ge=1, le=100)
     keep_raw_audio: bool = False
     security_mode: Literal["off", "basic", "strict"] = "off"
+    workflow_mode: Literal["assistive", "research"] = "assistive"
+    watermark_policy: Literal["required", "research_unprotected"] = "required"
+    watermark_version: str = "audioseal-v1"
+    builtin_voice_manifest: Path | None = None
+    account_session_seconds: int = Field(28800, ge=300, le=86400)
+    pin_lock_seconds: int = Field(300, ge=30)
+    pin_attempt_limit: int = Field(5, ge=1, le=10)
     model_version: str = "urdu-xtts-v1"
     lang_tag: str = "ar"
     language_aliases: dict[str, str] = Field(default_factory=dict)
@@ -133,7 +140,7 @@ class Settings(BaseSettings):
     liveness_max_pending: int = Field(100, ge=1, le=1000)
     liveness_min_seconds: float = Field(1, gt=0)
     liveness_max_seconds: float = Field(20, gt=0, le=30)
-    emotion_enabled: bool = False
+    emotion_enabled: bool = True
     emotion_speed_delta: float = Field(0.05, ge=0, le=0.1)
     emotion_temperature_delta: float = Field(0.03, ge=0, le=0.1)
     safety_whisper_repo: str = "Systran/faster-whisper-small"
@@ -142,6 +149,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def check_settings(self):
+        if self.workflow_mode == "assistive" and self.security_mode == "strict":
+            raise ValueError("Strict spoken checks require WORKFLOW_MODE=research; assistive access must not require speech")
+        if self.watermark_policy == "research_unprotected" and self.workflow_mode != "research":
+            raise ValueError("Unprotected audio is only available in explicit research mode")
         key = self.aria_key.get_secret_value()
         if self.require_auth and len(key) < 32:
             raise ValueError("REQUIRE_AUTH needs an ARIA_KEY of at least 32 characters")

@@ -34,7 +34,7 @@ Default source limits are 30 minutes / 256 MiB. Output is a suitable section of 
 
 It uses the configured backend bearer key without printing it. Timing depends on your hardware, process load, and deployment; the script's budget check is not a universal performance promise.
 
-## Optional safety models
+## Required protection and optional research models
 
 [prepare_safety_models.py](prepare_safety_models.py) is the explicit downloader for AudioSeal and Whisper/ECAPA assets. Ordinary API calls never run it.
 
@@ -42,7 +42,7 @@ Install the extra CPU dependencies first:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
-.\.venv\Scripts\python.exe -m pip install -r aria_backend/requirements-safety.txt
+.\.venv\Scripts\python.exe -m pip install -r aria_backend/requirements-watermark.txt
 ```
 
 Then allow downloads for this setup process. This example preserves your previous process environment value:
@@ -51,7 +51,7 @@ Then allow downloads for this setup process. This example preserves your previou
 $previousLocalOnly = $env:LOCAL_ONLY
 try {
     $env:LOCAL_ONLY = "false"
-    .\.venv\Scripts\python.exe aria_backend/scripts/prepare_safety_models.py --allow-downloads --feature all
+    .\.venv\Scripts\python.exe aria_backend/scripts/prepare_safety_models.py --allow-downloads --feature watermark
 } finally {
     $env:LOCAL_ONLY = $previousLocalOnly
 }
@@ -77,4 +77,25 @@ Input is a JSON list like:
 
 The current evaluator's reference normalization and expected `urdu` field are Urdu-oriented; it is not a universal multilingual benchmark. Character error rate and speaker similarity are measurements to interpret, not proof of intelligibility or clinical usefulness. Keep private references and reports out of Git.
 
-The summary includes fixed example baseline values. They are not a newly measured baseline for your dataset. The FYP needs held-out speakers, a matched baseline, listener-based emotion assessment, and marked/unmarked watermark robustness measurements. Those additional evaluation tools/results are proposed in [Chapter 20](../../README.md#chapter-20--fyp-priorities-architecture-proposal-and-evaluation) and must not be presented as already implemented.
+Fixed example baseline scores have been removed. `--wav-directory` accepts matching prerecorded clips for paired before/after evaluation. PIN-protected API generation also accepts `ARIA_ACCOUNT_TOKEN` in the process environment.
+
+## Watermark robustness
+
+[evaluate_protection.py](evaluate_protection.py) requires real installed local AudioSeal weights; it exits without invented scores if loading fails.
+
+```powershell
+.\.venv\Scripts\python.exe aria_backend/scripts/evaluate_protection.py --sources examples/audio --output reports/protection-smoke.json
+```
+
+Use `--genuine` with a separate authorized genuine-human WAV directory to measure false positives. The synthetic example alone cannot measure them. The report includes embedding acceptance, SNR, payload recovery and detection after export, resampling, noise, trimming, MP3 and AAC compression. Choose a new output path on each run.
+
+## Blinded expression study
+
+[evaluate_emotion.py](evaluate_emotion.py) accepts a private plan with `speakers: [{voice_id, held_out: true}, ...]` (at least two) and `sentences: [{id, text, language}, ...]`. Keep reference enrollment audio separate from test utterances. Provide authorized styles before generation; neutral fallbacks remain recorded honestly.
+
+```powershell
+.\.venv\Scripts\python.exe aria_backend/scripts/evaluate_emotion.py generate --plan private-plan.json --output evaluation_runs/study1
+.\.venv\Scripts\python.exe aria_backend/scripts/evaluate_emotion.py score --trials evaluation_runs/study1/private-trials.json --ratings collected-ratings.csv --output reports/emotion-study1.json
+```
+
+Send listeners only blind WAV identifiers. Keep the private trial manifest hidden. Collect real listener IDs and labels in the generated CSV format; scoring reports confusion matrices, accuracy, macro-F1 and raw pairwise agreement. Report incomplete generation, missing labels, neutral fallbacks and participant limitations. Private plans, recordings and results belong outside Git.

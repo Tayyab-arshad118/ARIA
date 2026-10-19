@@ -59,3 +59,7 @@ The supplied server handles references and output in memory rather than maintain
 After restarting Colab/tunnel, copy the current key and URL into the app's Connect screen. If configuration changes, rerun the appropriate config/model/API/server cells. If the app reports an old notebook or language mismatch, confirm you ran this version and matching model settings.
 
 Listen to the self-test; an HTTP success does not establish intelligibility or speaker similarity. Local [notebook tests](../tests/README.md) use a fake model/CUDA implementation and do not certify the actual checkpoint.
+
+## Checkpoint identity
+
+The notebook hashes the checkpoint, configuration and vocabulary into a 64-character SHA-256 fingerprint. Health and conditioning responses include it; synthesis rejects a mismatched requested fingerprint. Run this updated notebook before using the assistive backend. A display version string alone cannot make old conditioning compatible. The hashing step does not rewrite or train weights.

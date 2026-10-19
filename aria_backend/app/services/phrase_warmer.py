@@ -4,7 +4,7 @@ import logging
 
 from .errors import ServiceError
 from .synthesis import render
-from .urdu_normalizer import normalize_urdu
+from .languages import preserve_text
 
 log = logging.getLogger("aria.backend")
 
@@ -43,7 +43,8 @@ class PhraseWarmer:
     async def warm_once(self):
         state = self.state
         async with state.data_lock:
-            voices = [p["id"] for p in state.voices.list() if not p["needs_reenrollment"]]
+            voices = [p["id"] for p in state.voices.list() if not p["needs_reenrollment"] and
+                p.get("available", True) and (state.settings.workflow_mode == "research" or p.get("authorization_status") in {"active", "builtin"})]
             if self.preferred in voices:
                 voices.remove(self.preferred)
                 voices.insert(0, self.preferred)
@@ -62,7 +63,7 @@ class PhraseWarmer:
                     epoch = self.epoch
                     try:
                         phrase = state.phrases.get(snapshot["id"])
-                        _, latents = state.voices.get(voice_id)
+                        _, latents = await state.voices.resolve(voice_id)
                     except ServiceError:
                         continue
                     speed = state.settings.default_speed
@@ -71,13 +72,15 @@ class PhraseWarmer:
                         continue
                 self.status = "warming"
                 # A foreground cache hit and prediction can run while this awaits the GPU.
-                audio = await render(state, normalize_urdu(phrase["urdu"]), latents, speed, voice_id)
+                audio = await render(state, preserve_text(phrase["urdu"]), latents, speed, voice_id)
+                audio, _ = await state.watermarker.finalize(audio)
                 async with state.data_lock:
                     if epoch != self.epoch:
                         return
                     try:
                         current = state.phrases.get(phrase["id"])
-                        state.voices.get(voice_id)
+                        if voice_id != "aria_builtin":
+                            state.voices.get(voice_id)
                     except ServiceError:
                         continue
                     if state.phrases.key(current, voice_id, speed) == key:

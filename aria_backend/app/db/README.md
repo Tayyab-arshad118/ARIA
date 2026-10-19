@@ -35,3 +35,7 @@ Tables are created at startup. `create_all` does not provide a general migration
 Voice deletion explicitly clears related caches, history, verification, and emotion records. Phrase edits/delete clear prepared audio. Delete-all removes personal data and resets the phrase collection while retaining connection settings/key. Background work must re-check deletion/version state before writing.
 
 Stop the backend before a simple file-copy backup. A Git clone restores source code and seed resources, not a user's voice profiles.
+
+## Additive assistive records
+
+`AccessActor` stores salted PIN hashes, scopes and persistent attempt locks. `EnrollmentApproval` stores encrypted recording-specific grants. `VoiceConsent` binds active provenance to a checkpoint fingerprint. Existing voice rows survive migration; legacy audio caches are invalidated once using a runtime marker. Consent and style revocation invalidate affected audio.

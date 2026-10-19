@@ -38,7 +38,7 @@ def test_chunker_boundaries_and_whole_words():
 
 
 def setup_transliterator(tmp_path, handler, **overrides):
-    settings = Settings(_env_file=None, data_dir=tmp_path, groq_api_key="test-key", local_only=False,
+    settings = Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path, groq_api_key="test-key", local_only=False,
                         llm_translit_enabled=True, groq_backoff_seconds=0, **overrides)
     db = Database(tmp_path)
     cipher = Fernet(Fernet.generate_key())

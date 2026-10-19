@@ -89,6 +89,35 @@ class EmotionReference(Base):
     revision: Mapped[str]
 
 
+class AccessActor(Base):
+    __tablename__ = "access_actors"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    role: Mapped[str]
+    pin_hash: Mapped[str]
+    permissions: Mapped[bytes] = mapped_column(LargeBinary)
+    active: Mapped[bool] = mapped_column(default=True)
+    failures: Mapped[int] = mapped_column(default=0)
+    locked_until: Mapped[float] = mapped_column(default=0.0)
+
+
+class EnrollmentApproval(Base):
+    __tablename__ = "enrollment_approvals"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    content: Mapped[bytes] = mapped_column(LargeBinary)
+    active: Mapped[bool] = mapped_column(default=True)
+    used: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[str] = mapped_column(default=timestamp)
+
+
+class VoiceConsent(Base):
+    __tablename__ = "voice_consents"
+    voice_id: Mapped[str] = mapped_column(String, primary_key=True)
+    content: Mapped[bytes] = mapped_column(LargeBinary)
+    model_fingerprint: Mapped[str]
+    active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[str] = mapped_column(default=timestamp)
+
+
 class Database:
     def __init__(self, directory: Path):
         directory.mkdir(parents=True, exist_ok=True)

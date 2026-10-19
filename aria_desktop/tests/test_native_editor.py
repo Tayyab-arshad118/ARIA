@@ -23,7 +23,7 @@ def test_native_edit_never_rewrites_roman_and_is_spoken_verbatim(monkeypatch):
         assert instance.input.value == "namaste"
         assert instance.preview.value == "नमस्ते दोस्त" and instance.preview_task is None
         await instance.speak_clicked()
-        assert backend.spoken[-1] == ("नमस्ते दोस्त", "voice-1", 1.0, "native", "hi")
+        assert backend.spoken[-1] == ("नमस्ते दोस्त", "voice-1", 1.0, "native", "hi", "neutral")
         assert instance.input.value == "namaste"
         await instance.shutdown()
     asyncio.run(run())

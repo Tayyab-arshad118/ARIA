@@ -11,6 +11,10 @@ __pycache__/
 *.db
 *.log
 *.lock
+reports/
+evaluation_runs/
+**/private-trials.json
+**/ratings-template.csv
 *.pth
 *.pt
 *.ckpt

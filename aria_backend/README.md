@@ -32,7 +32,7 @@ Default address: `http://127.0.0.1:8001`. Run one worker; in-memory sessions, lo
 
 ## Request flow
 
-ARIA's [assistive project priorities](../README.md#chapter-20--fyp-priorities-architecture-proposal-and-evaluation) treat emotional expression and watermarking as core requirements. Current flags/prototype behavior are not a claim that those requirements are complete. Keep experimental spoken checks separate from patient authentication and voice authorization. The handbook records the current fail-open watermark path, pre-watermark caches, strict spoken gate, and proposed replacements.
+ARIA defaults to assistive access and required protected audio. Manual expression, recording-specific authorization, optional patient PINs and scoped caregivers are implemented. See [Chapter 20](../README.md#chapter-20--fyp-implementation-migration-and-evaluation) for migration and remaining real-model/listener evaluation.
 
 1. Request guards apply authentication, origin, size, time, and admission limits.
 2. An [API handler](app/api/README.md) validates fields and coordinates work.
@@ -58,3 +58,7 @@ From the repository root:
 ```
 
 Change route schemas in API modules, business behavior in services, shared defaults in settings, and persisted structures in the database package. Update the matching tests and `.env.example` when adding settings. Keep real secrets and model quality claims out of test fixtures and documentation.
+
+## Assistive deployment
+
+Normal settings now require protected audio and a strong device key. Use the root protection installer before synthesis. The updated Colab notebook must report a concrete checkpoint fingerprint. See [Chapter 20](../README.md#chapter-20--fyp-implementation-migration-and-evaluation) for historical-recording authorization, optional PIN/caregiver access, migration and the licensed generic-voice provider.

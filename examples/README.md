@@ -21,3 +21,7 @@ Patients can supply appropriately authorized historical recordings from before s
 Use your own authorized single-speaker recording for actual voice enrollment. A synthetic conversion sample does not test the fidelity of a person's cloned voice. The example files are intentionally allowed through Git ignore rules; arbitrary personal audio elsewhere is ignored.
 
 When adding examples, explain what is supplied, how it was produced, how to run it, and what it does not prove. Keep files small and free of real secrets or private user content.
+
+## Default voice manifest
+
+[builtin-voice.manifest.example.json](builtin-voice.manifest.example.json) is an intentionally unconfigured template. Supply an actual redistribution-permitted generic synthetic asset and its license/hash in private configuration. Conversion samples in this folder are not asserted to be licensed built-in voice assets.

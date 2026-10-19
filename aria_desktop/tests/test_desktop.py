@@ -77,10 +77,13 @@ class Backend:
             raise app.AppError("Test connection failure")
         return wav(), "مجھے پانی چاہیے"
 
-    async def enroll(self, path, name):
+    async def enroll(self, path, name, authorization_id=None):
         self.enrolled.append((path, name))
         self.available.append({"id": "new-voice", "name": name, "needs_reenrollment": False})
         return "new-voice"
+
+    async def authorize_recording(self, path, source_type, basis, reference):
+        return "patient-grant"
 
     async def close(self):
         self.closed = True
@@ -88,14 +91,14 @@ class Backend:
     async def predict(self, prefix):
         return ["pani", "madad"]
 
-    async def phrases(self, voice_id, speed, language="ur"):
+    async def phrases(self, voice_id, speed, language="ur", emotion="neutral"):
         return {"items": [dict(item) for item in self.bank], "warm_status": "ready"}
 
     async def warm_phrases(self, voice_id):
         self.warmed.append(voice_id)
 
-    async def speak_phrase(self, identifier, voice_id, speed, language="ur"):
-        self.phrase_calls.append((identifier, voice_id, speed, language))
+    async def speak_phrase(self, identifier, voice_id, speed, language="ur", emotion="neutral"):
+        self.phrase_calls.append((identifier, voice_id, speed, language, emotion))
         self.bank[0]["last_used"] = "2026-10-13"
         self.bank[0]["cached"] = True
         return wav(), self.bank[0]["urdu"]
@@ -146,8 +149,8 @@ def test_client_contracts_and_key_only_to_backend(tmp_path):
         if request.url.path.endswith("transliterate"):
             return httpx.Response(200, json={"urdu": "مجھے پانی چاہیے"})
         if request.url.path.endswith("tts"):
-            assert json.loads(request.content) == {"text": "mujhe pani chahiye", "voice_id": "voice-1", "speed": 1.2, "input_mode": "auto", "language": "ur"}
-            return httpx.Response(200, content=wav(), headers={"content-type": "audio/wav", "X-Urdu-Text": quote("مجھے پانی چاہیے")})
+            assert json.loads(request.content) == {"text": "mujhe pani chahiye", "voice_id": "voice-1", "speed": 1.2, "input_mode": "auto", "language": "ur", "emotion": "neutral"}
+            return httpx.Response(200, content=wav(), headers={"content-type": "audio/wav", "X-Urdu-Text": quote("مجھے پانی چاہیے"), "X-ARIA-Watermark": "verified", "X-ARIA-Watermark-Policy": "required"})
         assert b'name="name"' in request.content and b'name="file"' in request.content
         return httpx.Response(201, json={"id": "new"})
     async def run():
@@ -309,6 +312,8 @@ def test_enrollment_file_cancel_and_success(tmp_path):
         path.write_bytes(wav())
         await instance.file_selected(SimpleNamespace(files=[SimpleNamespace(path=str(path), name="voice.wav", size=path.stat().st_size)]))
         assert instance.enroll_name.value == "voice"
+        instance.enroll_confirm.value = True
+        instance.enroll_reference.value = "Patient test authorization"
         await instance.save_voice()
         assert backend.enrolled == [(path, "voice")]
         assert instance.voice.value == "new-voice" and not instance.dialog.open
@@ -435,7 +440,7 @@ def test_phrase_grid_favorites_edit_and_one_tap_playback(monkeypatch):
         await instance.phrase_filter_changed()
         assert len(instance.phrase_controls) == 3
         await instance.phrase_controls[0][0].on_click(None)
-        assert backend.phrase_calls == [("phrase-1", "voice-1", 1.0, "ur")]
+        assert backend.phrase_calls == [("phrase-1", "voice-1", 1.0, "ur", "neutral")]
         assert instance.audio is not None
         assert instance.phrases[0]["last_used"]
         await instance.open_phrase_editor(instance.phrases[0])
@@ -481,7 +486,7 @@ def test_strict_session_client_headers_and_clear_on_close(tmp_path):
                                              "voice_id": "voice-1", "expires_in": 300})
         assert request.headers["x-aria-session"] == "private-session"
         assert request.headers["authorization"] == "Bearer app-key"
-        return httpx.Response(200, content=wav(), headers={"content-type": "audio/wav"})
+        return httpx.Response(200, content=wav(), headers={"content-type": "audio/wav", "X-ARIA-Watermark": "verified", "X-ARIA-Watermark-Policy": "required"})
     async def run():
         client = app.BackendClient(app.AppSettings(api_key="app-key"), httpx.MockTransport(handler))
         path = tmp_path / "challenge.wav"
@@ -499,7 +504,7 @@ def test_verification_dialog_unlocks_strict_controls(tmp_path):
     class StrictBackend(Backend):
         verified = False
         async def health(self):
-            return {"colab": {"reachable": True}, "security_mode": "strict", "emotion_enabled": True}
+            return {"colab": {"reachable": True}, "workflow_mode": "research", "security_mode": "strict", "emotion_enabled": True}
         def session_valid(self, voice_id):
             return self.verified and voice_id == "voice-1"
         async def challenge(self, voice_id):
@@ -507,7 +512,7 @@ def test_verification_dialog_unlocks_strict_controls(tmp_path):
         async def verify(self, identifier, path):
             self.verified = True
             return 300
-        async def add_emotion(self, voice_id, emotion, path):
+        async def add_emotion(self, voice_id, emotion, path, authorization_id=None):
             self.saved_emotion = (voice_id, emotion)
     async def run():
         backend, page = StrictBackend(), Page()
@@ -525,6 +530,8 @@ def test_verification_dialog_unlocks_strict_controls(tmp_path):
         assert not instance.speak_button.disabled and not instance.emotion_button.disabled
         await instance.open_emotion()
         instance.selected_file = path
+        instance.enroll_confirm.value = True
+        instance.enroll_reference.value = "Authorized test style"
         await instance.save_emotion()
         assert backend.saved_emotion == ("voice-1", "happy")
         await instance.shutdown()
@@ -552,7 +559,7 @@ def test_language_selection_preview_and_speech(monkeypatch):
         assert instance.mode.visible and not instance.preview.rtl
         assert "30 minutes" in instance.reference_help()
         await instance.speak_clicked()
-        assert backend.spoken[-1][-1] == "en"
+        assert backend.spoken[-1][-2:] == ("en", "neutral")
         await instance.shutdown()
     asyncio.run(run())
 

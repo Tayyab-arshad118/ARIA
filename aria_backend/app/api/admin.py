@@ -22,6 +22,7 @@ class ConnectInput(BaseModel):
 @router.post("/admin/connect")
 async def connect(body: ConnectInput, request: Request):
     state = request.app.state
+    state.access.patient(request)
     try:
         url = validate_colab_url(body.colab_url, state.settings.allow_insecure_colab)
         key = body.colab_api_key.get_secret_value().strip()
@@ -44,6 +45,8 @@ async def connect(body: ConnectInput, request: Request):
     finally:
         await probe.close()
     async with state.data_lock:
+        state.access.patient(request)
+        state.identity.observe(remote)
         state.languages.update(remote)
         with state.db.session.begin() as session:
             session.merge(RuntimeSetting(key="colab", value=state.cipher.encrypt(json.dumps({"url": url, "key": key}).encode())))
@@ -67,6 +70,7 @@ class ColabUpdate(BaseModel):
 @router.post("/admin/colab-url")
 async def update_colab(body: ColabUpdate, request: Request):
     state = request.app.state
+    state.access.patient(request)
     try:
         url = validate_colab_url(body.colab_url, state.settings.allow_insecure_colab)
         if not url:
@@ -77,6 +81,7 @@ async def update_colab(body: ColabUpdate, request: Request):
     if supplied_key is not None and (not supplied_key or not supplied_key.isascii() or any(c.isspace() for c in supplied_key)):
         raise ServiceError(422, "API key must be nonempty ASCII without whitespace")
     async with state.data_lock:
+        state.access.patient(request)
         key = state.gpu.key if supplied_key is None else supplied_key
         encrypted = state.cipher.encrypt(json.dumps({"url": url, "key": key}).encode())
         with state.db.session.begin() as session:

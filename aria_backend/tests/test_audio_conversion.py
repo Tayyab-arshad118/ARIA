@@ -28,7 +28,7 @@ def compressed(kind, seconds=7):
 
 @pytest.mark.parametrize("kind", ["mp3", "m4a"])
 def test_conversion_to_mono_pcm_wav(kind, tmp_path):
-    raw = prepare_reference(compressed(kind), Settings(_env_file=None, data_dir=tmp_path))
+    raw = prepare_reference(compressed(kind), Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path))
     with sf.SoundFile(io.BytesIO(raw)) as file:
         assert file.format == "WAV" and file.subtype == "PCM_16"
         assert file.samplerate == 22050 and file.channels == 1
@@ -47,13 +47,13 @@ def test_upload_converts_before_gpu_enrollment(backend, kind):
 @pytest.mark.parametrize("raw", [b"#EXTM3U\nhttps://example.com/audio.mp3", b"file:///etc/passwd", b"not audio"])
 def test_reject_non_audio_and_playlists(raw, tmp_path):
     with pytest.raises(ServiceError) as error:
-        prepare_reference(raw, Settings(_env_file=None, data_dir=tmp_path))
+        prepare_reference(raw, Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path))
     assert error.value.status == 422
 
 
 def test_compressed_duration_limit(tmp_path):
     with pytest.raises(ServiceError):
-        prepare_reference(compressed("mp3", 8), Settings(_env_file=None, data_dir=tmp_path, max_reference_seconds=7, max_source_seconds=7))
+        prepare_reference(compressed("mp3", 8), Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path, max_reference_seconds=7, max_source_seconds=7))
 
 
 def test_long_upload_skips_silent_intro_and_sends_bounded_reference(backend):
@@ -79,7 +79,7 @@ def test_long_upload_skips_silent_intro_and_sends_bounded_reference(backend):
 
 
 def test_long_compressed_recording_and_source_limits(tmp_path):
-    settings = Settings(_env_file=None, data_dir=tmp_path)
+    settings = Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path)
     result, sr = sf.read(io.BytesIO(prepare_reference(compressed("mp3", 65), settings)))
     assert len(result) == 30 * sr
     settings.max_source_seconds = 60
@@ -95,5 +95,5 @@ def test_long_compressed_recording_and_source_limits(tmp_path):
 @pytest.mark.parametrize("kind", ["silent", "clipped"])
 def test_long_unusable_recording_is_rejected(kind, tmp_path):
     with pytest.raises(ServiceError) as error:
-        prepare_reference(reference(65, **{kind: True}), Settings(_env_file=None, data_dir=tmp_path))
+        prepare_reference(reference(65, **{kind: True}), Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path))
     assert error.value.status == 422

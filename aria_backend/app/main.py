@@ -15,7 +15,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import SecretStr
 
 from .config import Settings, validate_colab_url
-from .db import Database, RuntimeSetting
+from .db import Database, RuntimeSetting, AudioCache, PhraseAudio
+from sqlalchemy import delete
 from .services.cache import AudioCacheService
 from .services.crypto import load_cipher
 from .services.errors import ServiceError
@@ -30,6 +31,9 @@ from .services.watermark import Watermarker
 from .services.emotion import EmotionService
 from .services.languages import Languages
 from .services.phrase_translation import PhraseTranslation
+from .services.access import Access
+from .services.model_identity import ModelIdentity
+from .services.builtin_voice import BuiltinVoice
 
 log = logging.getLogger("aria.backend")
 
@@ -73,6 +77,8 @@ class RequestGuard:
         async def reject(status, detail):
             await JSONResponse({"detail": detail}, status_code=status)(scope, receive, send)
         secret = self.settings.aria_key.get_secret_value()
+        if self.settings.workflow_mode == "assistive" and len(secret) < 32:
+            return await reject(503, "Initialize protected device settings with Start ARIA or configure_local.py")
         authenticated = not secret or hmac.compare_digest(headers.get(b"authorization", b""), ("Bearer " + secret).encode())
         client = (scope.get("client") or ("unknown", 0))[0]
         if not self.budget(client, failed=not authenticated):
@@ -145,7 +151,16 @@ def create_app(settings=None, gpu=None, groq_client=None, verification_engine=No
         state.db = Database(settings.data_dir)
         try:
             state.cipher = load_cipher(settings)
+            # Invalidate legacy unprotected audio once; never delete voice/profile records.
+            with state.db.session.begin() as session:
+                if session.get(RuntimeSetting, "protected_audio_cache_v4") is None:
+                    session.execute(delete(AudioCache))
+                    session.execute(delete(PhraseAudio))
+                    session.add(RuntimeSetting(key="protected_audio_cache_v4", value=state.cipher.encrypt(b"1")))
             state.gpu = gpu or GPUClient(settings)
+            state.identity = ModelIdentity(settings, state.db, state.cipher)
+            state.access = Access(settings, state.db, state.cipher)
+            state.builtin = BuiltinVoice(settings, state.db, state.cipher, state.gpu, state.identity)
             state.languages = Languages(settings, state.db, state.cipher)
             with state.db.session() as session:
                 stored = session.get(RuntimeSetting, "colab")
@@ -163,8 +178,10 @@ def create_app(settings=None, gpu=None, groq_client=None, verification_engine=No
             state.watermarker = Watermarker(settings, watermark_engine)
             state.emotions = EmotionService(settings, state.db, state.cipher, state.gpu, state.liveness)
             state.voices = VoiceStore(settings, state.db, state.cipher, state.gpu, state.liveness)
+            state.voices.access, state.voices.identity, state.voices.builtin = state.access, state.identity, state.builtin
             state.cache = AudioCacheService(settings, state.db, state.cipher)
             state.cache.emotions = state.emotions
+            state.cache.identity, state.cache.watermarker, state.cache.builtin = state.identity, state.watermarker, state.builtin
             state.phrases = PhraseStore(settings, state.db, state.cipher, state.cache)
             state.phrases.seed()
             state.predictor = Predictor(settings, state.db, state.cipher)
@@ -206,8 +223,8 @@ def create_app(settings=None, gpu=None, groq_client=None, verification_engine=No
     async def invalid_key(request, error):
         return JSONResponse({"detail": "Encrypted data cannot be read; restore the original encryption key"}, status_code=500)
 
-    from .api import admin, health, text, tts, voices, phrases, predict, safety
-    for module in (admin, health, text, tts, voices, phrases, predict, safety):
+    from .api import admin, health, text, tts, voices, phrases, predict, safety, access
+    for module in (admin, health, text, tts, voices, phrases, predict, safety, access):
         app.include_router(module.router, prefix="/api")
     return app
 

@@ -14,13 +14,13 @@ def load_cipher(settings):
         # Never silently replace a lost key if encrypted records already exist.
         from sqlalchemy import select
         from ..db import (Database, Voice, AudioCache, TextCache, RuntimeSetting, Phrase, PhraseAudio,
-                          SpokenHistory, VerificationProfile, EmotionReference)
+                          SpokenHistory, VerificationProfile, EmotionReference, AccessActor, EnrollmentApproval, VoiceConsent)
         db = Database(settings.data_dir)
         try:
             with db.session() as session:
                 if any(session.scalar(select(table).limit(1)) is not None
                        for table in (Voice, AudioCache, TextCache, RuntimeSetting, Phrase, PhraseAudio,
-                                     SpokenHistory, VerificationProfile, EmotionReference)):
+                                     SpokenHistory, VerificationProfile, EmotionReference, AccessActor, EnrollmentApproval, VoiceConsent)):
                     raise RuntimeError("Encryption key missing; restore the original key before opening existing data")
         finally:
             db.close()

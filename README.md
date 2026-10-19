@@ -31,7 +31,7 @@ The working interface is **Python/Flet**. There is no separate Dart app to run. 
 17. [Backups, updates, and model changes](#chapter-17--backups-updates-and-model-changes)
 18. [Repository map and development](#chapter-18--repository-map-and-development)
 19. [Glossary and current limits](#chapter-19--glossary-and-current-limits)
-20. [FYP priorities, architecture proposal, and evaluation](#chapter-20--fyp-priorities-architecture-proposal-and-evaluation)
+20. [FYP implementation, migration, and evaluation](#chapter-20--fyp-implementation-migration-and-evaluation)
 
 ## Chapter 1 — What ARIA does
 
@@ -48,13 +48,13 @@ The normal flow is **connect → register/select a voice → choose a language �
 | Long recordings | Up to 30 minutes / 256 MiB of source audio by default; a short usable section is selected. |
 | Cached speech | Previously generated matching audio can be reused. |
 | Responsive interface | Separate welcome, connection, voice, compose, and phrase screens, with light/dark modes. |
-| Emotional expression | Core goal; the prototype has automatic lexical selection and reference conditioning, not validated user-controlled emotion. |
-| Audio watermarking | Core goal; the AudioSeal prototype still needs required protected-output handling and quantitative evaluation. |
+| Emotional expression | Manual neutral/happy/sad/angry/calm choices, optional auto selection, authorized reference conditioning, and explicit neutral fallback. Listener validation remains outstanding. |
+| Audio watermarking | Required embedding and detection before caching/playback; failure blocks audio. A robustness evaluator is included. |
 | Experimental spoken check | Optional research capability, disabled by default; unsuitable as a required gate for an aphonic user. |
 
 Registration does not train a new voice model. It derives a reusable voice representation using your supplied checkpoint. The repository's example speech is synthetic demonstration material, not a personal voice profile.
 
-**Current prototype versus required design:** emotion/watermark flags still default to false, watermark embedding can fail open, and legacy strict mode requires a spoken challenge. Those are gaps, not the intended assistive deployment policy. Chapter 20 proposes corrections before major implementation changes. This documentation update does not silently change active access controls or claim that missing model evaluations have been performed.
+**Current implementation:** assistive mode is the default, normal audio protection is required, and spoken challenges are research-only. Optional patient PINs, scoped caregivers, recording authorization, manual expression, and checkpoint fingerprints are implemented. The generic default-voice provider needs a separately licensed synthetic reference; no reference or checkpoint is redistributed. Chapter 20 explains setup, migration, and evaluation limits.
 
 ## Chapter 2 — The three parts of the system
 
@@ -119,6 +119,8 @@ Double-click [Start ARIA.bat](Start%20ARIA.bat). It:
 4. Starts the local backend, waits for it to respond, and opens the desktop app.
 
 You do not need to type a local server address or local bearer key for this standard installation. First launch can take longer because packages are installed. If startup fails, read the printed message rather than opening repeated copies.
+
+Before generating speech on a fresh installation, close ARIA and run [Setup ARIA Protection.bat](./Setup%20ARIA%20Protection.bat) once, then restart. It prepares the required CPU watermark models. Run the updated Colab notebook as well. Existing profiles without authorization/fingerprint records need authorized re-enrollment; see [migration steps](#202-first-start-and-migration).
 
 The launcher uses port 8001 by default, prevents duplicate launcher instances, and can reuse a compatible responding backend. It does not kill unrelated processes occupying a port. Closing the app stops the backend that launcher started; a reused backend is left running. Startup logs go to `startup.log` in the active data folder.
 
@@ -185,7 +187,7 @@ The app uses a centered phone-style layout. Short windows use compact spacing. W
 
 Select a saved profile, or choose **Add a voice**, enter a name, and select an authorized recording. It can be historical audio from before speech loss; the app imports files and does not require new speech. Then choose **Continue to speaking**. Profiles marked for re-enrollment belong to an incompatible model version.
 
-The speed slider ranges from 0.5× to 2.0×. **Change voice** returns to selection. Verification/emotion controls appear when their prototype flags are enabled. Keep `SECURITY_MODE=off` for the current assistive workflow; this disables the spoken gate, not backend bearer authentication. Legacy strict mode is a research configuration and can exclude users unable to speak.
+The speed slider ranges from 0.5× to 2.0×. **Change voice** returns to selection. Choose expression for messages and quick phrases. The account button supports non-spoken PIN access and recovery. Keep `WORKFLOW_MODE=assistive` and `WATERMARK_POLICY=required`; strict spoken verification is rejected in assistive mode.
 
 ### Use the two text fields
 
@@ -243,12 +245,12 @@ This exports the selected section, not the full length of a long recording, and 
 
 1. **Preview:** the app briefly waits after typing. Urdu can use a dictionary/rules; Groq can prepare other scripts. The preview does not need an online GPU.
 2. **Final wording:** manual native edits bypass conversion. The backend checks text size and model language support.
-3. **Voice lookup:** it decrypts the chosen voice's representations. Strict mode checks the voice session.
+3. **Voice lookup:** it checks account permission, active authorization and checkpoint compatibility, then decrypts conditioning. The built-in generic provider uses its separately licensed reference. Spoken checks apply only to explicit research strict mode.
 4. **Cache lookup:** matching speech can be reused. Keys include voice, language/model tag, text, speed, model version, and processing settings.
 5. **Chunking:** text is split into smaller sections, normally at sentence/word boundaries, with a default 180-character model request limit. Long Chinese/Japanese text can split by characters.
 6. **Generation:** the backend sends text and voice representations to Colab. Local concurrency is bounded; actual GPU execution is serialized in the notebook.
 7. **Assembly:** ordered chunks are resampled to 24 kHz, joined with a default 150 ms pause, and loudness-normalized with peak limiting.
-8. **Prototype emotion/protection:** enabled emotion references may influence generation; enabled watermark processing runs on outgoing audio. Legacy strict authorization is checked again. Chapter 20 explains the required replacement policy.
+8. **Protection:** after final audio processing, AudioSeal embeds and validates the encoded WAV. Only verified audio enters normal caches. Cache hits are validated again without embedding twice. Authorization is rechecked before delivery.
 9. **Playback:** the returned WAV is played with a new audio control; old playback is stopped/released.
 
 The default text limit is 2,000 characters. Long messages may require several GPU calls. Playback uses a completed WAV, not a streaming speech connection. Loudness processing is RMS-based rather than LUFS mastering.
@@ -323,7 +325,7 @@ On Windows, private files normally live under `%LOCALAPPDATA%\ARIA\config`. Othe
 | Group | Settings | Defaults or purpose |
 | --- | --- | --- |
 | Local server | `HOST`, `PORT` | `127.0.0.1`, `8001`. |
-| Access | `ARIA_KEY`, `REQUIRE_AUTH`, `ALLOWED_HOSTS`, `ALLOWED_ORIGINS` | Base development defaults are permissive; the private helper creates a strong token and loopback restrictions. |
+| Access | `ARIA_KEY`, `REQUIRE_AUTH`, `ALLOWED_HOSTS`, `ALLOWED_ORIGINS` | Assistive mode requires a strong device key; the private helper creates it with loopback restrictions. Optional PIN sessions add patient/caregiver permissions. |
 | API text | `LLM_TRANSLIT_ENABLED`, `LOCAL_ONLY`, `TRANSLIT_STRATEGY`, `GROQ_MODEL` | Off/local by default; model default `openai/gpt-oss-120b`. Connect can enable API-first behavior. |
 | Model identity | `MODEL_VERSION`, `LANG_TAG`, `LANGUAGE_ALIASES` | Controls compatibility and language mapping. |
 | Storage | `DATA_DIR`, `FERNET_KEY`, `KEEP_RAW_AUDIO` | Location, encryption, optional originals; raw retention is false by default. |
@@ -332,7 +334,7 @@ On Windows, private files normally live under `%LOCALAPPDATA%\ARIA\config`. Othe
 | Resource bounds | `MAX_JSON_BYTES`, `MAX_PARALLEL_UPLOADS`, `MAX_INFLIGHT` | 1 MiB JSON, one upload, eight requests. |
 | Timeouts | `GPU_TIMEOUT_SECONDS`, `GROQ_TIMEOUT_SECONDS`, `PHRASE_TRANSLATION_TIMEOUT_SECONDS` | 120, 10, and 30 seconds. |
 | Caches | `AUDIO_CACHE_ENTRIES`, `TRANSLIT_CACHE_ENTRIES` | 100 general audio entries and 5000 text entries. |
-| Prototype feature flags | `SECURITY_MODE`, `WATERMARK_ENABLED`, `EMOTION_ENABLED` | Currently off by default; emotion/watermarking remain core priorities, not completed deployment guarantees. |
+| Assistive policy | `WORKFLOW_MODE`, `WATERMARK_POLICY`, `EMOTION_ENABLED` | Defaults: assistive, required, true. `WATERMARK_ENABLED` only controls the optional research path; it cannot disable required protection. |
 | App | `ARIA_PREVIEW_DELAY_MS`, `ARIA_REQUEST_TIMEOUT_SECONDS`, `ARIA_MAX_UPLOAD_BYTES` | 450 ms, 300 seconds, 256 MiB. |
 
 All supported settings are listed in [the backend example](aria_backend/.env.example) and [the desktop example](aria_desktop/.env.example). Keep upload limits consistent between client and server. Increasing source duration does not require a longer conditioning window; changing the selected window also requires matching notebook limits.
@@ -364,7 +366,7 @@ The notebook uses a separate API key, bounded requests, validated array shapes/t
 
 ### Deletion and backups
 
-Deleting one voice removes associated audio, learned history, verification baseline, and emotion references. Delete-all removes personal voice/audio/text/history records, revokes sessions, and resets phrases. Runtime connection settings and the encryption key remain so the installation can still function.
+Deleting one personal voice removes its audio, history, authorization, verification baseline, and emotion references. Delete-all removes personal profiles and personal caches, clears text/history records, and resets phrases. The built-in provider, its conditioning and compatible built-in audio survive; translated text may need regeneration. Runtime connection settings and the encryption key remain.
 
 Deletion does not erase external backups, source files kept elsewhere, or third-party copies. Do not delete the encryption key as a routine reset: startup refuses to silently replace a missing key while encrypted records remain.
 
@@ -372,43 +374,31 @@ Git ignores private environments, keys, databases, personal recordings, model we
 
 ## Chapter 12 — Emotion, watermarking, and experimental verification
 
-Emotion and watermarking are core parts of ARIA's intended research contribution. They are currently flag-controlled prototypes requiring further implementation and evaluation. Spoken verification is a separate optional experiment. Additional dependencies/models are prepared through [backend scripts](aria_backend/scripts/README.md).
+### Required audio protection
 
-### Watermarking
+Normal settings are `WORKFLOW_MODE=assistive` and `WATERMARK_POLICY=required`. Run [Setup ARIA Protection.bat](./Setup%20ARIA%20Protection.bat) once after the initial app setup, then restart. It installs CPU AudioSeal dependencies and downloads the configured trusted public weights. Model files stay outside Git. Missing models produce an actionable failure, never unmarked cloned audio.
 
-`WATERMARK_ENABLED=true` applies AudioSeal after audio assembly, including cache hits. Internal caches hold pre-watermark audio. `X-ARIA-Watermark` reports `embedded`, `unavailable`, or `disabled`.
+The pipeline is synthesis → final resampling/assembly/normalization → watermark → encoded-WAV detection and expected-payload check → encrypted protected cache → playback. Cached audio is rechecked without another watermark. Typed speech, quick phrases, and background warming use the same finalizer. The desktop rejects required-policy responses without `X-ARIA-Watermark: verified` and `X-ARIA-Watermark-Policy: required`.
 
-**Current gap:** unavailable embedding returns unmarked audio with an `unavailable` header, and the desktop client does not surface that protection failure before playback. General and phrase caches store pre-watermark audio. This does not meet the required protected-output design. Chapter 20 proposes a replacement and cache migration; enabling the flag alone is not proof of protection.
+The public 16-bit payload identifies the configured marker, not ownership or a cryptographic signature. Compression and editing can reduce detection. Evaluate actual output with [evaluate_protection.py](aria_backend/scripts/evaluate_protection.py); do not infer robustness from mocked tests.
 
-Unavailable detection reports an error rather than a false negative. The public 16-bit marker is not a cryptographic signature or proof of ownership. Editing/re-encoding can affect detection; successful embedding does not guarantee later detection.
+### Expression
 
-### Spoken challenge verification
+Choose neutral, happy, sad, angry, or calm explicitly. Auto is optional and uses the existing lexical suggestion rules. An explicit choice wins over those rules. A matching authorized same-voice recording supplies style conditioning. If none exists, the app reports neutral fallback; there is no fabricated intensity control or claim that changing speed proves emotion.
 
-| Mode | Behavior |
-| --- | --- |
-| `off` | No speech gate or verification baseline at enrollment. |
-| `basic` | Enrollment can store a baseline; verification is optional. |
-| `strict` | Speech and relevant reference actions require a valid voice-bound session, including cached speech. |
+Reference uploads use the same exact-recording authorization flow as voice enrollment. Replacing or revoking one invalidates its affected cached output. Headers report requested expression, effective expression and method. Listener recognition, pronunciation, identity preservation and actual checkpoint quality still require evaluation.
 
-The user records the displayed Urdu challenge and uploads a short WAV. Local Whisper checks the words; ECAPA checks speaker similarity. Both checks must pass. Challenges are single-use, normally expire within 60 seconds including verification time, and successful sessions normally last 300 seconds. The app sends the token as `X-ARIA-Session`.
+### Research-only spoken verification
 
-These describe existing modes, not instructions to demand a spoken test from a patient. Strict mode must not be part of the primary assistive workflow; it remains a legacy research/demo capability for suitable participants.
+Assistive enrollment never creates an ECAPA baseline and never asks for spoken proof. Research deployments explicitly set `WORKFLOW_MODE=research`; then `SECURITY_MODE=basic` can create a baseline, and `strict` gates personal speech using Whisper/ECAPA challenges. Strict mode is rejected in assistive configuration. These experiments do not establish patient consent.
 
-Even basic mode currently computes a baseline during enrollment and can fail if ECAPA is unavailable. The experiment is therefore not fully isolated yet. Enrollment for research can use authorized existing recordings instead of fresh speech. Passing a spoken check does not establish voice ownership or patient consent.
-
-### Emotion references
-
-`EMOTION_ENABLED=true` enables neutral, happy, sad, calm, and angry styles. A small local Urdu/Roman-oriented lexicon chooses a tag, optionally swaps to a matching voice reference, and makes modest speed/temperature changes. It is not general multilingual emotion understanding or a guaranteed XTTS emotion control.
-
-**Current gap:** the reference-upload selector labels a stored recording; it is not a per-message emotion override. Speech contracts have no requested-emotion field. User-controlled expression and blinded listener evaluation are required next steps. Speed or temperature changes alone do not establish recognizable emotion.
-
-Uploads use the same supported formats and long-source preparation as enrollment. Verification, when enabled, also checks speaker matching. Replacing a reference invalidates affected audio caches.
+Only an explicit research deployment may select `WATERMARK_POLICY=research_unprotected`. With its legacy `WATERMARK_ENABLED=false`, output is labeled `research_unprotected` and the UI shows a notice. This is not the normal communication policy. Research dependencies remain in [requirements-safety.txt](aria_backend/requirements-safety.txt).
 
 ## Chapter 13 — API reference
 
 ### Local backend
 
-Paths below are relative to `http://127.0.0.1:8001`. Send `Authorization: Bearer <ARIA_KEY>` when configured. Strict mode also needs `X-ARIA-Session` for the chosen voice.
+Paths below are relative to `http://127.0.0.1:8001`. Send `Authorization: Bearer <ARIA_KEY>`. Once PIN protection is enabled, personal actions also use `X-ARIA-Account`. Only research strict mode uses `X-ARIA-Session`.
 
 | Method and route | Purpose |
 | --- | --- |
@@ -571,7 +561,7 @@ Coverage includes language routing, conversion, independent native editing, stal
 | Conversion unavailable | Check Groq credentials, network/provider limits, and effective saved settings. |
 | Native edit stops automatic updates | Intentional override: edit Roman input or change mode/language to resume conversion. |
 | Reference rejected | Check clear single-speaker audio, silence/clipping, duration/size, channels, and rate. |
-| Voice needs re-enrollment | Model version changed or an optional verification baseline is missing. |
+| Voice needs re-enrollment | Authorization is missing/revoked, the checkpoint fingerprint changed, or research verification data is incompatible. Re-enroll an authorized existing recording; fresh speech is not required. |
 | Cached speech asks for verification | Strict sessions apply to cache hits too. |
 | Challenge fails/expires | Use the exact current prompt and intended speaker; check time limits and local models. |
 | Encrypted data unreadable | Restore the original key paired with the database; do not generate a replacement over existing data. |
@@ -595,7 +585,7 @@ Close the app/launcher, update the source, and restart. The Windows helper detec
 
 1. Update Colab with matching checkpoint/config/vocabulary files.
 2. Verify training tag and supported languages.
-3. Set a new deliberate local `MODEL_VERSION`.
+3. Set a deliberate local `MODEL_VERSION`. The updated notebook also hashes the actual checkpoint, config and vocabulary; keeping the same version string cannot bypass a changed fingerprint.
 4. Reload the model/API/tunnel and reconnect.
 5. Re-enroll voices; old arrays may be incompatible even if their shapes match.
 6. Listen to real output in each intended language.
@@ -646,106 +636,85 @@ There is no separate Flutter prototype folder. Flet's internal rendering/build t
 
 ARIA is a development/research application with implemented workflows. Real checkpoint quality, language intelligibility, speaker similarity, optional verification reliability, watermark robustness, and Android distribution need separate acceptance checks. It does not provide continuous training, speaker separation, guaranteed emotion control, built-in microphone capture, or permanent hosted inference. Colab/tunnel availability and API limits can affect operation.
 
-## Chapter 20 — FYP priorities, architecture proposal, and evaluation
+## Chapter 20 — FYP implementation, migration, and evaluation
 
-### Governing purpose and priorities
+### 20.1 What is implemented
 
-The primary user may be unable to produce any speech and may also have limited motor ability. Every major decision should answer: **does this make communication more accessible, emotionally expressive, secure, and reliable for someone who cannot speak?** Security must protect that person without excluding them.
+The main workflow supports people who cannot speak. Device access, optional PINs, historical-recording authorization, personal voice selection and recovery require no spoken challenge. This remains a single-patient installation, not a multi-tenant clinical identity service. Encryption and authorization records cannot independently verify legal authority or clinical suitability.
 
-| Priority | Required outcome |
+| Requirement | Implementation | Remaining evidence or setup |
+| --- | --- | --- |
+| Generic communication | `aria_builtin`, a dedicated ARIA Default Voice provider, distinct from the legacy personal `default` alias | A licensed redistributable synthetic reference must be supplied; no ready voice is falsely claimed. |
+| Accessible personal access | Device bearer key, optional 6–12 digit PIN, scoped caregiver accounts, recovery | Usability testing with actual assistive input devices/users. |
+| Recording authorization | Single-use exact-file SHA-256 grants, encrypted provenance, revocation | Operator attestation is not independent legal verification. |
+| Expression | Manual choice, authorized reference conditioning, neutral fallback | Real checkpoint and blinded listener evaluation. |
+| Protected output | Required AudioSeal embedding, detection, protected caches, client enforcement | Broader robustness, genuine-human controls and quality measurements. |
+| Checkpoint compatibility | SHA-256 identity of checkpoint/config/vocabulary in Colab and local consent/cache metadata | Run the updated notebook against your actual model. |
+| Urdu preservation | Native text bypasses destructive spelling normalization | Listen to actual model pronunciation, including نہیں، چاہیے، میں، طیب، گھڑی، کھڑکی. |
+
+### 20.2 First start and migration
+
+1. Back up the stopped installation's runtime data and matching encryption key. Keep private configuration outside Git.
+2. Run [Start ARIA.bat](./Start%20ARIA.bat) once to prepare the normal app environment. Close it, run [Setup ARIA Protection.bat](./Setup%20ARIA%20Protection.bat), then restart.
+3. Run the updated [Colab notebook](colab/ARIA_Colab_GPU.ipynb) with your existing checkpoint/config/vocabulary. It hashes the files and returns the fingerprint with health and conditioning. No weights are retrained or rewritten.
+4. Paste the Colab key and URL into Connect. Add the Groq key for multilingual preview. The local device key remains separate from the Colab key.
+5. Existing voice records are retained. Legacy audio caches are invalidated once because they may be unprotected. Existing profiles lacking recorded authorization or a concrete checkpoint fingerprint require re-enrollment from an authorized recording. Historical recordings are accepted; no new speech is needed.
+6. Choose **Use ARIA Voice** for the generic provider, or **Use My Voice** for a personal profile. An unconfigured generic provider explains what is missing instead of silently cloning a dataset speaker.
+
+Database changes are additive: account actors, enrollment approvals and voice consent have separate tables. Startup does not alter or delete old voice rows. The migration marker prevents repeated invalidation. Cache identity includes voice, language, expression/reference, checkpoint and protection configuration/weight hashes. Changing these values prevents reuse of incompatible clips.
+
+### 20.3 Configure the generic default voice
+
+Copy [builtin-voice.manifest.example.json](examples/builtin-voice.manifest.example.json) into a private asset directory. Supply a generic synthetic reference whose actual license permits redistribution and this use. Fill in its reference path, SHA-256, license name and license source; set `synthetic` and `redistribution_permitted` only when accurate. Set `BUILTIN_VOICE_MANIFEST` to that manifest's absolute path in the private backend environment and restart.
+
+The example deliberately is not ready to use. Bundled conversion samples are not asserted to have redistribution rights for a built-in voice. No dataset speaker or invented latent file is substituted. The provider verifies the reference hash and generates encrypted conditioning with the connected checkpoint. Compatible conditioning and protected audio can be reused; generating new speech still needs Colab. Delete-all retains the provider and compatible built-in audio, while translated text may need regeneration.
+
+### 20.4 Patient, caregiver and historical audio
+
+Before PIN setup, the holder of the strong local device key acts as the patient operator. The account control can set a patient PIN and display a one-time recovery code. Save that code privately. PIN sessions live in memory and expire after eight hours by default; restart requires login again. Five wrong attempts lock an account for five minutes by default. Persistent salted scrypt hashes replace plaintext PIN storage.
+
+The patient can create caregiver accounts with selected `speak`, `enroll` and `manage` permissions. A caregiver login never implies consent. To enroll, the patient records the source as historical/current, the authorization basis, and a short reference to the authorization evidence. The backend binds the resulting grant to the exact recording bytes. A caregiver with enrollment permission can use that specific grant once. Emotion references use the same process.
+
+Revoking a grant revokes affected profile/style authorization and invalidates relevant audio. Revoking a caregiver immediately removes that account's permissions. Recovery changes the patient PIN, rotates the recovery code, disables caregiver accounts and invalidates active sessions. Recovery does not prove voice ownership. Retain only the minimum necessary evidence reference; do not paste private medical records into this field.
+
+| Account API (under `/api`) | Purpose |
 | --- | --- |
-| 1. Reliable personalized restoration | Intelligible Urdu, recognizable speaker identity, natural timing, and few unwanted artifacts; evaluate speakers outside the fine-tuning data. |
-| 2. Emotional expressiveness | User-controlled expression with measured listener recognition, not a decorative selector. |
-| 3. Watermarking and voice protection | Functional, tested identification of generated speech and appropriate profile access controls. |
-| 4. Practical accessibility | Speech-free enrollment/access, historical recordings, predictions, saved phrases, accessible navigation/input. |
-| 5. Accessible identity and authorization | Non-spoken authentication and consent/representation processes; spoken liveness stays experimental. |
+| `GET /access/status` | PIN state and current actor. |
+| `POST /access/setup`, `/access/login`, `/access/logout` | Configure, unlock and lock local personal access. |
+| `POST /access/recover` | Use the recovery code and set a new PIN. |
+| `GET/POST /access/caregivers` | List/create scoped caregivers as patient. |
+| `DELETE /access/caregivers/{id}` | Revoke caregiver access. |
+| `POST /access/authorizations` | Create a recording-specific grant as patient. |
+| `DELETE /access/authorizations/{id}` | Revoke the grant and affected authorization. |
+| `POST /voices/{id}/revoke` | Revoke a personal voice and its caches. |
 
-Accessibility is a constraint across all priorities, not something to postpone until the fourth item. Patients may nominate a caregiver or representative, but verifying that caregiver is not the same as establishing patient authorization. A login, uploaded file, speaker match, or watermark proves none of these on its own.
+### 20.5 Evaluation that can be reproduced
 
-### Review of the current implementation
+[evaluate_protection.py](aria_backend/scripts/evaluate_protection.py) uses real local AudioSeal models. It measures embedding/encoded validation, waveform SNR, payload recovery and detection after WAV export, resampling, noise, trimming, MP3 and AAC compression. Supply separate authorized genuine-human controls for a false-positive estimate. Without them the report gives `null`, not an invented score. Record sample counts, thresholds, model identity, seed and codec settings; one synthetic clip is only a smoke test.
 
-This review covers the local backend, Flet client, Colab inference path, enrollment, emotion service, watermark service, and spoken-verification flow. The following are code findings, not claims about clinical performance.
+[evaluate_emotion.py](aria_backend/scripts/evaluate_emotion.py) generates shuffled blind trials for at least two explicitly held-out speakers with a fixed sentence set and all five manual emotions. Keep its private trial manifest away from listeners. Collect real ratings before scoring confusion matrices, accuracy, macro-F1 and raw pairwise agreement. Report fallback trials and missing labels separately. No listener results are bundled or fabricated.
 
-| Area | Current behavior and evidence | Gap to address |
+[evaluate.py](aria_backend/scripts/evaluate.py) measures Urdu-oriented transcription error and speaker similarity. Use `--wav-directory` for matched prerecorded before/after clips, or the protected API for new clips. Fixed example baseline numbers have been removed. A fresh paired baseline and held-out voices are necessary; automated similarity is not ownership verification.
+
+### 20.6 Acceptance and limits
+
+Automated regressions cover speech-free authorization, role scopes, recovery, recording hashes, consent revocation, checkpoint changes, manual expression, native Urdu preservation, fail-closed protected output, built-in persistence, and desktop playback enforcement. Mocked models test policy and integration, not audio quality.
+
+Before a real deployment, run the updated notebook with the actual fine-tuned checkpoint, enroll appropriately authorized held-out voices, inspect pronunciation and identity, collect blinded emotion ratings, and measure watermark false positives/robustness with a representative corpus. Verify keyboard, switch and screen-reader interaction with intended users. There is no claim of clinical efficacy, universal emotional control, or unremovable watermarking.
+
+### 20.7 Local validation recorded on 2026-10-19
+
+The final complete software regression run passed **232 tests** across backend, desktop and notebook contracts, including adapter, checkpoint-rejection and migration regressions. There was one upstream Starlette/httpx deprecation warning. Dependency consistency, Python/installer syntax, notebook output hygiene and credential-pattern checks also passed. No actual XTTS checkpoint or human listener study was run in this validation.
+
+Real AudioSeal 0.2.0 with CPU PyTorch 2.6.0 successfully embedded and validated the one bundled synthetic WAV. The adapter now supplies the 16-bit width, explicitly handles 16 kHz model input, and uses eager inference so Windows does not require a C++ compiler. The protected WAV had waveform SNR 25.74 dB; this is a distortion measure, not a listening-quality score.
+
+| Transformation (one sample each) | Watermark detected | Exact payload recovered |
 | --- | --- | --- |
-| Ordinary communication | `SECURITY_MODE` defaults to `off`; [liveness authorization](aria_backend/app/services/liveness.py) only gates strict mode. | Preserve speech-free access and separate experimental deployment settings explicitly. |
-| Enrollment | [VoiceStore](aria_backend/app/services/voice_store.py) accepts uploaded audio; any non-off security mode also computes an ECAPA baseline. | Historical audio already works, but baseline/model failures in basic mode can block enrollment. Make experimental baseline creation independent of core enrollment. |
-| Profile access | The local bearer token and encryption protect installation access/storage. | There is no patient/caregiver role system, consent record, delegation scope, or accessible account recovery. |
-| Emotion | [EmotionService](aria_backend/app/services/emotion.py) uses a lexicon, tagged references, and small parameter changes; [synthesis](aria_backend/app/services/synthesis.py) applies that selection. | No explicit per-message user override. The upload dialog is not an expression control. Reference usefulness and listener recognition remain unmeasured here. |
-| Watermark output | [Watermarker](aria_backend/app/services/watermark.py) applies AudioSeal but returns raw audio when embedding fails. | Required protection must not fail open during ordinary playback or future export/sharing. |
-| Audio caching | [Typed speech](aria_backend/app/api/tts.py), [phrase speech](aria_backend/app/api/phrases.py), and [warming](aria_backend/app/services/phrase_warmer.py) cache unmarked audio before outgoing processing. | Required policy must cover every path and old caches, not just a new endpoint or configuration flag. |
-| Client playback | [BackendClient](aria_desktop/aria_app.py) accepts valid WAV responses without enforcing watermark status. | Display protection failures clearly and reject an unprotected response when protection is required. |
-| Evaluation | [evaluate.py](aria_backend/scripts/evaluate.py) computes Urdu-oriented transcription error and speaker similarity. | No held-out speaker protocol, blinded emotion study, or watermark robustness report is supplied. Any bundled baseline numbers are comparison inputs, not new experimental results. |
+| WAV export | Yes | Yes |
+| 16 kHz resampling round trip | Yes | Yes |
+| Added noise at 20 dB | Yes | Yes |
+| MP3 at 96 kbps | Yes | Yes |
+| AAC at 96 kbps | Yes | No |
+| Trim 10% from each end | Yes | No |
 
-Historical recordings do not require a new microphone feature: the existing file importer and reference preparation can handle them. They still need adequate usable audio and an appropriate authorization process. When no suitable recording exists, ARIA must not claim it can reconstruct the person's exact earlier voice from nothing.
-
-### Proposed architecture — not implemented by this documentation update
-
-#### A. Separate assistive access from experimental liveness
-
-Introduce an explicit assistive/research deployment policy. In assistive mode, enrollment, voice selection, and daily communication must work without issuing a spoken challenge. An incompatible strict-liveness configuration should produce a setup error with clear remediation, rather than silently weakening an administrator's access policy or unexpectedly blocking a patient later.
-
-Keep the existing liveness engine and research tests, but place them behind an explicitly enabled experimental area. Optional ECAPA baseline creation should have its own operation/status; failure must not roll back an otherwise authorized assistive enrollment. Label spoken checks experimental and explain that they require retained speech.
-
-Develop non-spoken authentication independently: evaluate device-bound credentials/passkeys, password-manager-compatible login, or a locally protected PIN with attempt limits and accessible recovery. Permit supported keyboard, switch, touch, or assistive-technology input without requiring a particular gesture or voice. A passkey deployment needs a proper relying-party/platform design; it cannot be added by putting a token into an arbitrary localhost field. Consider alternatives when biometrics or fine motor control are unsuitable. [FIDO passkeys](https://fidoalliance.org/passkeys/) and [W3C accessible authentication guidance](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html) inform this investigation; ARIA does not currently implement or claim conformity to these mechanisms.
-
-Proposed records should distinguish **account identity**, **voice owner/patient**, **authorization evidence**, **caregiver delegation**, and **voice profile**. A delegation should specify permitted actions and be revocable; caregiver login must never automatically create patient consent. Support an institutionally reviewed representative process where applicable without claiming that a software checkbox establishes legal authority. Store only necessary sensitive evidence with access restrictions, retention, and a clear audit/revocation path.
-
-#### B. Add an explicit emotion contract and keep it honest
-
-Add a requested emotion to both typed-speech and quick-phrase requests: neutral, happy, sad, angry, calm, with an optional automatic suggestion mode. A user's explicit choice must take priority over the lexicon. Carry the choice through the client, API validation, synthesis, cache identity, and response metadata.
-
-Report requested emotion, effective reference selection, and whether the requested reference was available. If a suitable same-speaker reference is missing, do not label a speed-adjusted neutral result as proven emotional speech. Explain the fallback and offer neutral expression or another available choice. Reference revisions and both requested/effective emotion must be reflected in caching so one style cannot return another style's clip.
-
-Evaluate reference-conditioned synthesis first because it fits the existing architecture. XTTS exposes reference conditioning and sampling parameters, but that alone does not establish reliable emotion control; speed changes can also introduce artifacts. The compatibility decision must be verified with the actual fine-tuned checkpoint. [XTTS model API documentation](https://docs.coqui.ai/en/latest/models/xtts.html)
-
-#### C. Use one required watermark finalization path
-
-The proposed ordinary cloned-audio path is:
-
-```text
-Authorized voice + selected expression
-    → synthesis → resampling/stitching/normalization
-    → watermark embedding → configured detection/payload check
-    → store protected audio and protection metadata
-    → return for playback or any future export/sharing
-```
-
-All typed speech, phrase generation, background warming, and cache hits must go through the same policy. Keep unprotected intermediate audio transient rather than retaining it in normal audio caches. Add watermark/model/payload/pipeline version identifiers to cache keys/records. Old pre-watermark cache entries must be invalidated or reprocessed before they can be served under the new policy, without deleting voice profiles or consent records.
-
-When required embedding or its acceptance check fails, return an explicit failure without an unprotected WAV or a successful protected-cache entry. The client should preserve the user's text, explain the service failure, and allow retry/copying the message. Evaluate an explicitly identified, non-cloned device-voice fallback separately if practical communication requires it; do not silently substitute an unwatermarked clone. Prepare and validate dependencies before assistive deployment rather than discovering missing weights during everyday use.
-
-The detector result is evidence about the configured watermark, not absolute authenticity, ownership, or resistance to removal. Audit byte consistency between cached, played, and exported audio. Any future download/sharing route must consume finalized protected audio rather than bypassing it. [AudioSeal implementation and detector](https://github.com/facebookresearch/audioseal)
-
-### Evaluation plan and evidence required
-
-These are proposed experiments. No scores, listener outcomes, or clinical benefits are claimed here. Use appropriately authorized material, agreed participant procedures, and institutional review where applicable. Specify acceptance criteria before examining the final test results.
-
-| Study | Design | Report |
-| --- | --- | --- |
-| Personalized restoration | Separate speakers from fine-tuning data; hold reference and test utterances apart; document Urdu dialects, recording quality, and identical baseline settings. | Human intelligibility/pronunciation, transcription error, speaker similarity, artifacts, latency, and per-speaker results. |
-| Emotional expression | Balanced neutral/happy/sad/angry/calm utterances; randomize and blind listeners to the requested label; compare neutral, parameter-only, and reference-conditioned approaches. | Confusion matrix, per-emotion recognition, accuracy/macro-F1, listener agreement, uncertainty, naturalness, intelligibility, and identity preservation. |
-| Watermark detection | Separate marked and unmarked controls; calibrate thresholds on a validation set and keep them fixed for testing. | True/false positive and negative rates, payload/bit recovery, score distributions, sample counts, and failures. |
-| Watermark transformations | Test original output plus documented compression settings, resampling, and added noise; compare marked/unmarked audio under matching transformations. | Detection and payload recovery per transformation, quality/transcription/similarity change, and processing latency. |
-| Accessibility | Complete registration from historical audio, profile selection, typing/native editing, phrase playback, and recovery without speaking; test large text, keyboard focus, switch/screen-reader paths where available. | Task completion, input burden, time/error counts, accessibility failures, and participant feedback. |
-
-Keep transformation parameters reproducible: codec/bitrate, sample rates, noise type and SNR, clip duration, seeds, software/model versions, and thresholds. Include short clips and failed outputs rather than dropping difficult cases. Automated transcription or speaker embedding metrics do not replace listening and are not verified ownership tests.
-
-The existing evaluator includes fixed example baseline values in its output. Those values must not be presented as a measured held-out baseline for a new dataset. Build and record a fresh baseline under matching conditions for the FYP report.
-
-### Meaningful automated tests to add with implementation
-
-- Assistive enrollment and communication succeed without invoking a speech challenge or ECAPA verification engine, including when those experimental models are absent.
-- Patient authorization and caregiver identity remain separate; absent, expired, revoked, or out-of-scope delegations cannot authorize cloning.
-- Manual emotion overrides suggestions and reaches the model path; missing-reference behavior is explicit; caches cannot cross voices, styles, references, or model versions.
-- Typed speech, phrases, warming, and cache hits cannot deliver/cache unprotected normal audio after an embedding/detection failure.
-- Old cache migration cannot expose unmarked audio, restore revoked profiles, or discard authorized voice data.
-- Client status and playback rules match backend protection status, while preserving typed text and speech-free retry/recovery options.
-
-Use mocked engines to exercise control flow, then real models and human evaluation for the capabilities mocks cannot establish. An interface control or passing mock test is not evidence that listeners recognize emotion or that a watermark survives compression.
-
-### Implementation order and reporting
-
-First preserve reliable existing communication and establish speech-free access/enrollment boundaries. Then add the explicit emotion contract and required watermark finalizer with cache migration as bounded, independently tested changes. Build real evaluation tools/protocols alongside those implementations; do not postpone measurement until the viva. Keep experimental liveness separate throughout.
-
-For each milestone, report: what changed, what was tested automatically, what was tested with real models/listeners, what failed, and what remains unavailable. Describe the current prototype honestly during the FYP presentation. The guiding question remains: **does this help someone who cannot speak communicate with their own identity and expression, without excluding them through security requirements?**
+The local JSON report is ignored by Git. No genuine-human controls were supplied, so false-positive rate remains unknown. The failed payload cases are retained; this smoke test does not support a general robustness claim. Required playback checks both detection and the exact configured payload and withholds audio when either fails.

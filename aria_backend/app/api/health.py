@@ -12,12 +12,18 @@ async def health(request: Request):
     try:
         remote = await state.gpu.health()
         state.languages.update(remote)
+        state.identity.observe(remote)
         upstream = {"reachable": True, **remote}
     except ServiceError as error:
         upstream = {"reachable": False, "detail": error.detail}
     return {"ok": True, "colab": upstream, "model_version": state.settings.model_version,
             "local_only": state.settings.local_only, "security_mode": state.settings.security_mode,
-            "watermark_enabled": state.settings.watermark_enabled,
+            "workflow_mode": state.settings.workflow_mode,
+            "watermark_policy": state.settings.watermark_policy,
+            "account_pin_configured": state.access.configured(),
+            "builtin_voice": state.builtin.profile(),
+            "model_fingerprint": state.identity.fingerprint,
+            "watermark_enabled": state.settings.watermark_policy == "required" or state.settings.watermark_enabled,
             "watermark_available": state.watermarker.available,
             "emotion_enabled": state.settings.emotion_enabled,
             "languages": state.languages.catalog(),

@@ -8,6 +8,7 @@ from ..db import Phrase, PhraseAudio, RuntimeSetting, SpokenHistory
 from ..db.database import timestamp
 from .errors import ServiceError
 from .urdu_normalizer import normalize_urdu
+from .languages import preserve_text
 
 CATEGORIES = ("needs", "medical", "family", "greetings", "custom")
 
@@ -81,16 +82,19 @@ class PhraseStore:
 
     def reset(self):
         with self.db.session.begin() as session:
-            for table in (PhraseAudio, Phrase, SpokenHistory):
+            session.execute(delete(PhraseAudio).where(PhraseAudio.voice_id != "aria_builtin"))
+            seed_ids = [p["id"] for p in json.loads(self.settings.phrase_seed_path.read_text(encoding="utf-8"))]
+            session.execute(delete(PhraseAudio).where(PhraseAudio.phrase_id.not_in(seed_ids)))
+            for table in (Phrase, SpokenHistory):
                 session.execute(delete(table))
             session.execute(delete(RuntimeSetting).where(RuntimeSetting.key == "phrases_seeded"))
         self.seed()
 
-    def key(self, phrase, voice_id, speed, language="ur"):
-        text = normalize_urdu(phrase["urdu"]) if language == "ur" else phrase["display_text"]
-        audio_key = self.cache.key(voice_id, text, speed, language)
+    def key(self, phrase, voice_id, speed, language="ur", emotion="neutral"):
+        text = preserve_text(phrase["urdu"] if language == "ur" else phrase["display_text"])
+        audio_key = self.cache.key(voice_id, text, speed, language, emotion)
         digest = hashlib.sha256((phrase["id"] + ":" + audio_key).encode()).hexdigest()
-        return digest if language == "ur" else language + ":" + digest
+        return language + ":" + emotion + ":" + digest
 
     def audio(self, key):
         with self.db.session() as session:
@@ -105,8 +109,8 @@ class PhraseStore:
         with self.db.session() as session:
             return session.scalar(select(PhraseAudio.key).where(PhraseAudio.key == key)) is not None
 
-    def put_audio(self, phrase, voice_id, speed, audio, language="ur"):
-        key = self.key(phrase, voice_id, speed, language)
+    def put_audio(self, phrase, voice_id, speed, audio, language="ur", emotion="neutral"):
+        key = self.key(phrase, voice_id, speed, language, emotion)
         with self.db.session.begin() as session:
             session.merge(PhraseAudio(key=key, phrase_id=phrase["id"], voice_id=voice_id, speed=speed,
                                       audio=self.cipher.encrypt(audio)))
@@ -114,10 +118,10 @@ class PhraseStore:
             # Keep the current default-speed clip plus two most recent custom-speed clips per pair.
             rows = list(session.scalars(select(PhraseAudio).where(PhraseAudio.phrase_id == phrase["id"],
                 PhraseAudio.voice_id == voice_id,
-                PhraseAudio.key.not_like("%:%") if language == "ur" else PhraseAudio.key.like(language + ":%")
+                PhraseAudio.key.like(language + ":" + emotion + ":%")
                 ).order_by(PhraseAudio.created_at.desc())))
             retained_custom = 0
-            default_key = self.key(phrase, voice_id, self.settings.default_speed, language)
+            default_key = self.key(phrase, voice_id, self.settings.default_speed, language, emotion)
             for row in rows:
                 if row.speed == self.settings.default_speed:
                     if row.key != default_key:

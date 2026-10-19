@@ -1,4 +1,5 @@
 from typing import Literal
+import hashlib
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
@@ -31,6 +32,7 @@ class ChallengeInput(BaseModel):
 @router.post("/liveness/challenge")
 async def challenge(body: ChallengeInput, request: Request):
     state = request.app.state
+    state.access.patient(request)
     async with state.data_lock:
         voice_id, _ = state.voices.get(body.voice_id)
         return state.liveness.issue(voice_id)
@@ -39,6 +41,7 @@ async def challenge(body: ChallengeInput, request: Request):
 @router.post("/liveness/verify")
 async def verify(request: Request):
     state = request.app.state
+    state.access.patient(request)
     if state.settings.security_mode == "off":
         raise ServiceError(409, "Liveness verification is disabled")
     raw, fields = await wav_upload(request, max_fields=1)
@@ -68,7 +71,9 @@ async def detect(request: Request):
 @router.get("/voices/{voice_id}/emotions")
 async def emotion_list(voice_id: str, request: Request):
     state = request.app.state
+    state.access.actor(request, "speak")
     async with state.data_lock:
+        state.access.actor(request, "speak")
         resolved, _ = state.voices.get(voice_id)
         return state.emotions.list(resolved)
 
@@ -76,11 +81,19 @@ async def emotion_list(voice_id: str, request: Request):
 @router.post("/voices/{voice_id}/emotions/{emotion}", status_code=201)
 async def add_emotion(voice_id: str, emotion: EmotionTag, request: Request):
     state = request.app.state
-    raw, _ = await wav_upload(request)
+    actor = state.access.actor(request, "enroll")
+    raw, fields = await wav_upload(request, max_fields=1)
     async with state.data_lock:
+        actor = state.access.actor(request, "enroll")
+        provenance = None
+        if state.settings.workflow_mode == "assistive":
+            identifier = fields.get("authorization_id", "")
+            provenance = {**state.access.approval(identifier, hashlib.sha256(raw).hexdigest()),
+                "authorization_id": identifier, "enrolling_actor": actor["id"]}
+            await state.identity.sync(state.gpu, required=True)
         resolved, _ = state.voices.get(voice_id)
         state.liveness.authorize(resolved, request.headers.get("x-aria-session"))
-        result = await state.emotions.enroll(resolved, emotion, raw)
+        result = await state.emotions.enroll(resolved, emotion, raw, provenance)
         state.warmer.notify(resolved, invalidate=True)
         return result
 
@@ -88,7 +101,9 @@ async def add_emotion(voice_id: str, emotion: EmotionTag, request: Request):
 @router.delete("/voices/{voice_id}/emotions/{emotion}", status_code=204)
 async def delete_emotion(voice_id: str, emotion: EmotionTag, request: Request):
     state = request.app.state
+    state.access.actor(request, "manage")
     async with state.data_lock:
+        state.access.actor(request, "manage")
         resolved, _ = state.voices.get(voice_id)
         state.liveness.authorize(resolved, request.headers.get("x-aria-session"))
         state.emotions.delete(resolved, emotion)

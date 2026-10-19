@@ -28,11 +28,11 @@ The app defaults to local port 8001. Settings come from explicit `ARIA_APP_ENV_F
 
 ## Screens and controls
 
-The governing purpose is speech-free assistive communication. See [the FYP priorities and proposal](../README.md#chapter-20--fyp-priorities-architecture-proposal-and-evaluation) for the distinction between current prototype behavior and required accessibility/protection. Spoken liveness is experimental; it must not become a prerequisite for the primary patient workflow. Emotion and watermarking are core priorities whose existing prototypes still need evaluation and architectural changes.
+The governing purpose is speech-free assistive communication. See the [implementation and evaluation guide](../README.md#chapter-20--fyp-implementation-migration-and-evaluation). Normal access uses the device key and optional PIN, never a spoken challenge. Expression and protected output are implemented; model quality and accessibility still need real-user evaluation.
 
 - **Welcome:** supplied logo, one tagline, and Get started.
 - **Connect:** Colab key and URL, optional Groq key, checked connection, and quieter Advanced/offline actions.
-- **Your voice:** saved voice selection, historical-recording registration, speed, flag-controlled emotion references, experimental spoken checks, and a fixed Continue button.
+- **Your voice:** saved voice selection, historical-recording registration, speed, authorized emotion references and manual expression, research-only spoken checks, and a fixed Continue button.
 - **Compose:** language selection, independent Roman/native text fields, suggestions, playback controls, and connection/error status.
 - **Phrases:** translated cards, language selection, search/filter, favorites, recents, editing, and playback.
 
@@ -86,3 +86,7 @@ If a picker returns an unreadable cloud/content URI, save the recording locally 
 ```
 
 Keep service logic in the backend, UI tokens in the theme, and user interaction in the app. Update matching client contracts when changing API payloads. Preserve the asset/license exclusions in packaging and check both normal and short viewports after changing layout.
+
+## Assistive controls
+
+The voice entry offers Use ARIA Voice and Use My Voice. The generic provider shows an honest not-configured state until its licensed reference is installed. The account control supports PINs, scoped caregivers and recovery. Enrollment and emotion uploads record exact-file authorization. Expression is available for messages and phrases, with visible neutral fallback. Playback rejects unverified normal-policy audio; Copy message preserves a text alternative.

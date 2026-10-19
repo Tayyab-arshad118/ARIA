@@ -43,3 +43,7 @@ From the project root:
 This checks installation/settings without opening processes. The backend startup log is `startup.log` under active `DATA_DIR`. Dependency stamps live under `.venv` and should not be committed. First-run installation needs internet and Python 3.12; later runs reuse the environment.
 
 Keep shell paths quoted and secrets out of command arguments. Changes to process cleanup should only target processes created by the launcher, never all Python instances on a machine.
+
+## Protection setup
+
+[setup_protection.ps1](setup_protection.ps1), invoked by [Setup ARIA Protection.bat](../Setup%20ARIA%20Protection.bat), installs only CPU watermark dependencies and the trusted configured AudioSeal weights. Run after initial app setup, with ARIA closed, then restart. It restores the previous process download policy and leaves private configuration unchanged.

@@ -57,3 +57,7 @@ Checked Connect uses a temporary client to probe proposed credentials before sav
 ## Changing an endpoint
 
 Preserve shared validation, authorization before cache access, and relevant post-processing/session checks. Update the desktop client's matching method and backend tests when altering a contract. Review deletion/in-flight behavior, not only the success response.
+
+## Account and protection contracts
+
+[access.py](access.py) exposes patient PIN/recovery, scoped caregiver and recording-grant routes. Personal operations accept `X-ARIA-Account` after PIN setup. Speech and phrase requests accept `emotion`; response headers distinguish requested/effective style. Normal WAV responses require verified protection. See the [account route table](../../../README.md#204-patient-caregiver-and-historical-audio) for setup and revocation.

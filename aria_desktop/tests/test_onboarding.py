@@ -71,7 +71,7 @@ def test_phrase_language_loading_and_stable_controls(monkeypatch):
         instance, page, backend = ui()
         await instance.refresh()
         calls = []
-        async def phrases(voice, speed, language="ur"):
+        async def phrases(voice, speed, language="ur", emotion="neutral"):
             calls.append(language)
             return {"items": [{**backend.bank[0], "display_text": "I need water", "language": language}]}
         backend.phrases = phrases
@@ -84,7 +84,7 @@ def test_phrase_language_loading_and_stable_controls(monkeypatch):
         await instance.load_phrase_bank()
         assert instance.phrase_controls[0][0] is first_button
         await instance.play_phrase("phrase-1")
-        assert backend.phrase_calls[-1][-1] == "en"
+        assert backend.phrase_calls[-1][-2:] == ("en", "neutral")
         assert instance.home_navigation.visible and instance.language_bar.visible
         await instance.shutdown()
     asyncio.run(run())

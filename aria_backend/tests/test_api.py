@@ -70,7 +70,7 @@ class FakeGPU:
         assert sr == 22050 and data.ndim == 1
         return dict(LATENTS)
 
-    async def synthesize(self, text, latents, speed, language=None):
+    async def synthesize(self, text, latents, speed, language=None, temperature=None):
         async with self.semaphore:
             self.active += 1
             self.peak = max(self.active, self.peak)
@@ -86,7 +86,7 @@ class FakeGPU:
 
 @pytest.fixture
 def backend(tmp_path):
-    settings = Settings(_env_file=None, data_dir=tmp_path, fernet_key=Fernet.generate_key().decode(), phrase_prewarm_enabled=False)
+    settings = Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path, fernet_key=Fernet.generate_key().decode(), phrase_prewarm_enabled=False)
     gpu = FakeGPU()
     app = create_app(settings, gpu=gpu)
     with TestClient(app) as client:
@@ -106,7 +106,7 @@ def test_api_roundtrip_headers_cache_and_delete(backend):
     assert preview["method_used"] == "dictionary"
     assert client.post("/api/tts", json={"text": "hello"}).status_code == 404
     voice_id = enroll(client)
-    assert client.get("/api/voices").json()[0]["is_default"]
+    assert next(v for v in client.get("/api/voices").json() if v["id"] == voice_id)["is_default"]
     response = client.post("/api/tts", json={"text": "mujhe pani chahiye"})
     assert response.status_code == 200, response.text
     assert response.headers["content-type"] == "audio/wav"
@@ -117,7 +117,7 @@ def test_api_roundtrip_headers_cache_and_delete(backend):
     assert client.post("/api/tts", json={"text": "mujhe pani chahiye"}).content == response.content
     assert len(gpu.calls) == 1
     assert client.delete(f"/api/voices/{voice_id}").status_code == 204
-    assert client.get("/api/voices").json() == []
+    assert [v["id"] for v in client.get("/api/voices").json()] == ["aria_builtin"]
     with app.state.db.session() as session:
         assert session.scalar(select(AudioCache)) is None
 
@@ -156,7 +156,7 @@ def test_model_swap_flags_and_rejects_old_voices(backend):
     client, app, gpu = backend
     enroll(client)
     app.state.settings.model_version = "new-model"
-    assert client.get("/api/voices").json()[0]["needs_reenrollment"]
+    assert any(v["needs_reenrollment"] for v in client.get("/api/voices").json() if v["id"] != "aria_builtin")
     assert client.post("/api/tts", json={"text": "pani"}).status_code == 409
     new_id = enroll(client)
     assert next(v for v in client.get("/api/voices").json() if v["is_default"])["id"] == new_id
@@ -182,7 +182,7 @@ def test_offline_health_and_tts_error(backend):
 
 
 def test_optional_auth_and_sanitized_validation(tmp_path):
-    app = create_app(Settings(_env_file=None, data_dir=tmp_path, aria_key="local-secret"), gpu=FakeGPU())
+    app = create_app(Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path, aria_key="local-secret"), gpu=FakeGPU())
     with TestClient(app) as client:
         assert client.get("/api/health").status_code == 401
         assert client.delete("/api/voices/all").status_code == 401
@@ -193,7 +193,7 @@ def test_optional_auth_and_sanitized_validation(tmp_path):
 
 
 def test_runtime_url_key_persist_encrypted_and_no_restart(tmp_path):
-    settings = Settings(_env_file=None, data_dir=tmp_path)
+    settings = Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path)
     app = create_app(settings, gpu=FakeGPU())
     with TestClient(app) as client:
         response = client.post("/api/admin/colab-url", json={"colab_url": "https://new.trycloudflare.com/",
@@ -209,7 +209,7 @@ def test_runtime_url_key_persist_encrypted_and_no_restart(tmp_path):
 
 
 def test_keep_raw_audio_is_encrypted(tmp_path):
-    app = create_app(Settings(_env_file=None, data_dir=tmp_path, keep_raw_audio=True), gpu=FakeGPU())
+    app = create_app(Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path, keep_raw_audio=True), gpu=FakeGPU())
     with TestClient(app) as client:
         voice_id = enroll(client)
         with app.state.db.session() as session:
@@ -219,7 +219,7 @@ def test_keep_raw_audio_is_encrypted(tmp_path):
 
 
 def test_missing_key_does_not_replace_existing_key(tmp_path):
-    settings = Settings(_env_file=None, data_dir=tmp_path)
+    settings = Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path)
     with TestClient(create_app(settings, gpu=FakeGPU())) as client:
         enroll(client)
     (tmp_path / "voices" / ".fernet.key").unlink()
@@ -237,7 +237,7 @@ def test_gpu_client_retries_and_contract(tmp_path):
             return httpx.Response(503)
         return httpx.Response(200, json={"ok": True})
     async def run():
-        client = GPUClient(Settings(_env_file=None, data_dir=tmp_path, colab_url="https://gpu.test", colab_api_key="gpu-key",
+        client = GPUClient(Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path, colab_url="https://gpu.test", colab_api_key="gpu-key",
                                     retry_backoff_seconds=0), httpx.AsyncClient(transport=httpx.MockTransport(handler)))
         assert await client.request("POST", "/synthesize", json={}) == {"ok": True}
         assert len(calls) == 2
@@ -249,7 +249,7 @@ def test_gpu_client_retries_and_contract(tmp_path):
 def test_gpu_failure_mapping(tmp_path, status, expected):
     async def run():
         transport = httpx.MockTransport(lambda request: httpx.Response(status, text="sensitive upstream body"))
-        client = GPUClient(Settings(_env_file=None, data_dir=tmp_path, colab_url="https://gpu.test", gpu_retries=0),
+        client = GPUClient(Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path, colab_url="https://gpu.test", gpu_retries=0),
                            httpx.AsyncClient(transport=transport))
         with pytest.raises(ServiceError) as error:
             await client.request("GET", "/health")
@@ -288,7 +288,7 @@ def test_gpu_client_bounded_concurrency(tmp_path):
         finally:
             active -= 1
     async def run():
-        client = GPUClient(Settings(_env_file=None, data_dir=tmp_path, colab_url="https://gpu.test"),
+        client = GPUClient(Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path, colab_url="https://gpu.test"),
                            httpx.AsyncClient(transport=httpx.MockTransport(handler)))
         await asyncio.gather(*(client.synthesize("پانی", LATENTS, 1.0) for _ in range(5)))
         assert peak == 2

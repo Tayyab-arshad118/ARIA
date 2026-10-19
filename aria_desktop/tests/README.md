@@ -42,3 +42,7 @@ With the local backend available, use another terminal:
 The helper uses an isolated Edge profile, accesses the rendered accessibility tree, and writes PNGs into [screenshots](../../docs/screenshots/). Non-default dimensions are added to filenames. It enters a harmless example sentence; if Groq is enabled this can exercise conversion. It also assumes the current onboarding path and a selectable saved voice, so a different live setup may need manual navigation or adaptation.
 
 Captures are UI checks, not assertions of actual voice quality or a substitute for native playback/device testing. Do not capture entered keys or private recordings. Shut down temporary preview processes when finished.
+
+## Assistive regressions
+
+[test_assistive_ui.py](test_assistive_ui.py) covers generic entry, manual expression forwarding, in-memory account headers, and rejection of unverified required-policy WAVs.

@@ -39,7 +39,7 @@ The long-source scanner keeps a short suitable window, not the entire recording 
 | [phrase_warmer.py](phrase_warmer.py) | One background worker; prioritizes selected voices/favorites and rechecks state before saving. |
 | [errors.py](errors.py) | Safe service error type carrying status and user-facing detail. |
 
-Phrase audio is stored separately from general typed-speech audio. Cache hits must still pass applicable authorization and outgoing watermark processing. Do not remove language/version/reference revisions from keys just to increase hit rate.
+Phrase audio is stored separately from general typed-speech audio. Cache hits must still pass applicable authorization and protected-audio validation. Do not remove language/version/reference revisions from keys just to increase hit rate.
 
 ## Emotion, watermarking, and experimental verification
 
@@ -47,13 +47,17 @@ Phrase audio is stored separately from general typed-speech audio. Cache hits mu
 | --- | --- |
 | [liveness.py](liveness.py) | Single-use challenges, transcript/speaker checks, expiry, voice-bound sessions. |
 | [safety_audio.py](safety_audio.py) | Bounded WAV preparation for short verification/detection workloads. |
-| [watermark.py](watermark.py) | Prototype AudioSeal embedding/detection, local model handling, status reporting; required protection is the target policy. |
-| [emotion.py](emotion.py) | Local lexicon, reference enrollment/selection, mild parameter adjustments, cache invalidation. |
+| [watermark.py](watermark.py) | Required AudioSeal embedding/detection before caching, cache validation and local model handling. |
+| [emotion.py](emotion.py) | Manual expression, optional lexical suggestions, authorized reference conditioning, honest neutral fallback and cache invalidation. |
 
 These features load configured local weights; API requests do not download models. Missing verification models cannot grant a session. Watermark availability is explicitly reported. Emotion tags depend on a small lexicon and recordings, not a guaranteed model control.
 
-Emotion and watermarking are core FYP requirements despite their current opt-in implementation. The watermark service currently returns raw audio on embedding failure, and cached audio is stored before watermarking. The emotion service has no per-request user override. Spoken verification can also block enrollment/communication under non-default modes. These are reviewed gaps; see [the architectural proposal and evaluation requirements](../../../README.md#chapter-20--fyp-priorities-architecture-proposal-and-evaluation), not a configuration toggle, for the intended deployment behavior.
+Normal output must pass embedding and encoded-audio detection before caching/playback. Manual expression overrides the lexicon, with explicit neutral fallback. Assistive enrollment never requires an ECAPA baseline; spoken verification is research-only. See the [implementation and evaluation guide](../../../README.md#chapter-20--fyp-implementation-migration-and-evaluation).
 
 ## Change safely
 
 Keep external clients replaceable, inputs bounded, private content out of logs, and stored sensitive payloads encrypted. When work releases the shared data lock, check its generation/revision again before persisting. Follow [service/backend tests](../../tests/README.md), particularly deletion races and stale language results.
+
+## Assistive services
+
+[access.py](access.py) owns PIN sessions, scopes and encrypted consent grants. [builtin_voice.py](builtin_voice.py) owns the separate licensed generic provider. [model_identity.py](model_identity.py) remembers actual checkpoint hashes. [watermark.py](watermark.py) embeds and validates before caching, revalidates cache hits, and fails closed. Manual expression selection reports an explicit neutral fallback when no authorized style exists.

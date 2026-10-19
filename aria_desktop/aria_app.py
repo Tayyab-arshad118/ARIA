@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 import wave
+import hashlib
 
 import flet as ft
 import flet_audio as fta
@@ -120,8 +121,17 @@ class AppError(Exception):
 
 
 def response_error(status: int, operation: str) -> str:
+    if operation in {"account", "authorize"}:
+        if status == 401:
+            return "Unlock the local account with the correct account ID and PIN."
+        if status == 403:
+            return "This account is not authorized for that action. Caregiver access does not establish patient consent."
+        if status == 429:
+            return "Too many attempts. Wait before trying your PIN again."
+        if status == 409:
+            return "Check whether a patient PIN is already configured before repeating setup."
     if status == 401:
-        return "The backend key was not accepted. Check Connection settings."
+        return "Unlock your local account, or check the backend key in Advanced settings."
     if status == 403:
         if operation == "emotion":
             return "Use a recording of the selected speaker, and renew voice verification if it expired."
@@ -155,7 +165,7 @@ def response_error(status: int, operation: str) -> str:
             return "Automatic conversion is unavailable. Check your Groq key or choose Native script to use your text as written."
         if operation in {"verify", "challenge"}:
             return "Voice checking is unavailable. Check the backend's local verification models."
-        return "Speech or conversion is unavailable. Check Connect, or try Native script if automatic conversion failed."
+        return "Speech is unavailable. Check Colab, the selected voice assets, and required AudioSeal protection. Your text is preserved."
     if status == 502:
         return "The backend could not use the voice server. Check its Colab connection and key."
     return "The request could not finish. Check the backend and try again."
@@ -177,6 +187,8 @@ class BackendClient:
     def __init__(self, settings: AppSettings, transport=None):
         self.settings = settings
         self.sessions = {}
+        self.watermark_policy = "required"
+        self.last_expression = {}
         headers = {"Authorization": "Bearer " + settings.api_key} if settings.api_key else {}
         self.http = httpx.AsyncClient(base_url=settings.backend_url, headers=headers,
             timeout=httpx.Timeout(settings.request_timeout, connect=settings.connect_timeout),
@@ -184,6 +196,7 @@ class BackendClient:
 
     async def close(self):
         self.sessions.clear()
+        self.http.headers.pop("X-ARIA-Account", None)
         await self.http.aclose()
 
     def session_valid(self, voice_id):
@@ -234,7 +247,17 @@ class BackendClient:
             timeout=httpx.Timeout(10, connect=self.settings.connect_timeout))
         if not isinstance(data, dict) or not isinstance(data.get("colab"), dict):
             raise AppError("The backend status could not be read.")
+        self.watermark_policy = ("research_unprotected" if data.get("workflow_mode") == "research" and
+            data.get("watermark_policy") == "research_unprotected" else "required")
         return data
+
+    def check_protection(self, response):
+        status = response.headers.get("x-aria-watermark")
+        if self.watermark_policy == "required" and (status != "verified" or response.headers.get("x-aria-watermark-policy") != "required"):
+            raise AppError("Playback withheld: the server did not confirm required audio protection. Update the backend and AudioSeal setup.")
+        self.last_expression = {"requested": response.headers.get("x-aria-emotion-requested", "neutral"),
+            "effective": response.headers.get("x-aria-emotion", "neutral"),
+            "method": response.headers.get("x-aria-emotion-method", "neutral")}
 
     async def preview(self, text, language="ur", mode="auto"):
         data = await self.json_request("POST", "/api/transliterate", "preview",
@@ -276,21 +299,42 @@ class BackendClient:
         except httpx.HTTPError:
             raise AppError("The local server is not responding. Close the app and double-click Start ARIA.bat.") from None
 
-    async def speak(self, text, voice_id, speed, mode, language="ur"):
+    async def speak(self, text, voice_id, speed, mode, language="ur", emotion="neutral"):
         response = await self.request("POST", "/api/tts", "speak",
             headers=self.session_headers(voice_id),
-            json={"text": text, "voice_id": voice_id, "speed": speed, "input_mode": mode, "language": language})
+            json={"text": text, "voice_id": voice_id, "speed": speed, "input_mode": mode, "language": language, "emotion": emotion})
         if response.headers.get("content-type", "").split(";")[0] != "audio/wav" or not valid_wav(response.content):
             raise AppError("The backend did not return a playable WAV. Try again or check the model.")
+        self.check_protection(response)
         return response.content, unquote(response.headers.get("x-spoken-text", response.headers.get("x-urdu-text", "")))
 
-    async def enroll(self, path: Path, name: str):
+    async def enroll(self, path: Path, name: str, authorization_id=None):
         raw = await self.read_reference(path)
         data = await self.json_request("POST", "/api/voices", "enroll",
-            files={"file": ("reference" + path.suffix.lower(), raw, "application/octet-stream")}, data={"name": name})
+            files={"file": ("reference" + path.suffix.lower(), raw, "application/octet-stream")},
+            data={"name": name, **({"authorization_id": authorization_id} if authorization_id else {})})
         if not isinstance(data, dict) or not isinstance(data.get("id"), str):
             raise AppError("Enrollment could not be confirmed. Refresh the voice list before trying again.")
         return data["id"]
+
+    async def authorize_recording(self, path, source_type, basis, reference):
+        raw = await self.read_reference(path)
+        result = await self.json_request("POST", "/api/access/authorizations", "authorize",
+            json={"recording_sha256": hashlib.sha256(raw).hexdigest(), "source_type": source_type,
+                "basis": basis, "authorization_reference": reference})
+        return result["authorization_id"]
+
+    async def account(self, action="status", **values):
+        result = await self.json_request("GET" if action in {"status", "caregivers"} and not values else "POST",
+            "/api/access/" + action, "account", **({"json": values} if values else {}))
+        if isinstance(result, dict) and result.get("account_token"):
+            self.http.headers["X-ARIA-Account"] = result["account_token"]
+        if action == "logout":
+            self.http.headers.pop("X-ARIA-Account", None)
+        return result
+
+    async def revoke_caregiver(self, actor_id):
+        await self.request("DELETE", "/api/access/caregivers/" + quote_id(actor_id), "account")
 
     async def read_reference(self, path, wav_only=False):
         def read_reference():
@@ -325,14 +369,15 @@ class BackendClient:
         self.sessions[data["voice_id"]] = {"token": data["session_token"], "expires": time.monotonic() + data["expires_in"]}
         return data["expires_in"]
 
-    async def add_emotion(self, voice_id, emotion, path):
+    async def add_emotion(self, voice_id, emotion, path, authorization_id=None):
         raw = await self.read_reference(path)
         return await self.json_request("POST", "/api/voices/" + quote_id(voice_id) + "/emotions/" + emotion, "emotion",
-            headers=self.session_headers(voice_id), files={"file": ("reference" + path.suffix.lower(), raw, "application/octet-stream")})
+            headers=self.session_headers(voice_id), files={"file": ("reference" + path.suffix.lower(), raw, "application/octet-stream")},
+            data={"authorization_id": authorization_id} if authorization_id else {})
 
-    async def phrases(self, voice_id, speed, language="ur"):
+    async def phrases(self, voice_id, speed, language="ur", emotion="neutral"):
         data = await self.json_request("GET", "/api/phrases", "phrases",
-            params={"voice_id": voice_id or "default", "speed": speed, "language": language})
+            params={"voice_id": voice_id or "default", "speed": speed, "language": language, "emotion": emotion})
         if not isinstance(data, dict) or not isinstance(data.get("items"), list) or any(
             not isinstance(item, dict) or any(not isinstance(item.get(k), str) for k in ("id", "roman", "urdu", "category"))
             for item in data["items"]):
@@ -359,12 +404,13 @@ class BackendClient:
     async def delete_phrase(self, identifier):
         await self.request("DELETE", "/api/phrases/" + quote_id(identifier), "phrase-edit")
 
-    async def speak_phrase(self, identifier, voice_id, speed, language="ur"):
+    async def speak_phrase(self, identifier, voice_id, speed, language="ur", emotion="neutral"):
         response = await self.request("POST", "/api/phrases/" + quote_id(identifier) + "/speak", "speak",
             headers=self.session_headers(voice_id),
-            json={"voice_id": voice_id, "speed": speed, "language": language})
+            json={"voice_id": voice_id, "speed": speed, "language": language, "emotion": emotion})
         if response.headers.get("content-type", "").split(";")[0] != "audio/wav" or not valid_wav(response.content):
             raise AppError("The phrase audio could not be played. Try again.")
+        self.check_protection(response)
         return response.content, unquote(response.headers.get("x-spoken-text", response.headers.get("x-urdu-text", "")))
 
 
@@ -407,6 +453,8 @@ class AriaApp:
         self.dialog_kind = None
         self.security_mode = "off"
         self.emotion_enabled = False
+        self.workflow_mode = "assistive"
+        self.access_state = {"actor": None, "pin_configured": False}
         self.language_names = {"en": "English", "ur": "Urdu"}
         self.api_translit_enabled = False
         self.server_ready = False
@@ -461,7 +509,7 @@ class AriaApp:
         self.enroll_button = ft.OutlinedButton("Add a voice", icon=ft.Icons.ADD,
             height=48, on_click=self.open_enrollment,
             style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12), side=ft.BorderSide(1, BORDER)))
-        self.verify_button = ft.OutlinedButton("Verify voice", icon=ft.Icons.VERIFIED_USER_OUTLINED,
+        self.verify_button = ft.OutlinedButton("Experimental spoken check", icon=ft.Icons.VERIFIED_USER_OUTLINED,
             height=52, visible=False, on_click=self.open_verification)
         self.emotion_button = ft.OutlinedButton("Emotion reference", height=52, visible=False, on_click=self.open_emotion)
         self.safety_note = ft.Text("", size=13, color=MUTED)
@@ -469,6 +517,25 @@ class AriaApp:
             width=44, height=44, icon_color=MUTED, on_click=self.open_connection)
         self.theme_button = ft.IconButton(ft.Icons.DARK_MODE_OUTLINED, tooltip="Switch appearance",
             width=44, height=44, icon_color=MUTED, on_click=self.toggle_theme)
+        self.account_button = ft.IconButton(ft.Icons.LOCK_OUTLINE, tooltip="Account and caregiver access", on_click=self.open_account)
+        self.expression = ft.Dropdown(label="Expression", value="neutral", expand=True, border_radius=14,
+            filled=True, fill_color=PANEL, border_color=BORDER, text_size=14,
+            options=[ft.dropdown.Option(code, name) for code, name in [("neutral", "Neutral"), ("happy", "Happy"),
+                ("sad", "Sad"), ("angry", "Angry"), ("calm", "Calm"), ("auto", "Suggest from text")]],
+            on_change=self.expression_changed)
+        self.expression_note = ft.Text("Expression uses available authorized references; audible emotion still needs evaluation.", size=12, color=MUTED)
+        self.phrase_expression_note = ft.Text(self.expression_note.value, size=12, color=MUTED)
+        self.phrase_expression_label = ft.Text("Expression · Neutral", size=14, color=INK)
+        expression_items = []
+        for choice in ("neutral", "happy", "sad", "angry", "calm", "auto"):
+            async def choose_expression(event, value=choice):
+                self.expression.value = value
+                await self.expression_changed()
+            expression_items.append(ft.PopupMenuItem(text=choice.title(), on_click=choose_expression))
+        self.phrase_expression = ft.PopupMenuButton(content=ft.Container(self.phrase_expression_label,
+            padding=12, bgcolor=PANEL, border_radius=100), items=expression_items)
+        self.protection_note = ft.Text("Required audio protection · unverified output is withheld.", size=12, color=MUTED)
+        self.library_protection_note = ft.Text(self.protection_note.value, size=12, color=MUTED)
         self.speed_label = ft.Text(f"Speaking speed · {self.settings.default_speed:.1f}×", color=INK, size=13)
         self.speed = ft.Slider(min=0.5, max=2.0, divisions=15, value=self.settings.default_speed,
             label="{value}×", active_color=TEAL, on_change=self.speed_changed, on_change_end=self.speed_committed)
@@ -513,11 +580,12 @@ class AriaApp:
             self.safety_actions, self.safety_note,
         ], spacing=10))
         self.conversion_note.visible = False
-        self.compose_view = ft.Column([composer, self.conversion_note], spacing=16)
+        self.compose_view = ft.Column([ft.Row([self.expression]), self.expression_note, self.protection_note, composer,
+            ft.TextButton("Copy message", icon=ft.Icons.COPY, on_click=self.copy_message), self.conversion_note], spacing=12)
         self.library_voice = ft.Text("Choose a voice in Compose to speak phrases.", color=MUTED, size=13)
         self.library_view = ft.Column([
             ft.Text("Quick phrases", size=26, color=INK, weight=ft.FontWeight.W_500),
-            self.library_voice, self.phrase_search,
+            self.library_voice, self.phrase_expression, self.phrase_expression_note, self.library_protection_note, self.phrase_search,
             ft.Row([self.phrase_filter, self.add_phrase_button], wrap=True), self.phrase_status, self.phrase_grid,
         ], spacing=16, visible=False)
         self.navigation = ft.CupertinoSlidingSegmentedButton(selected_index=0, width=260, height=44,
@@ -526,7 +594,7 @@ class AriaApp:
             bgcolor=SOFT, thumb_color=PANEL, padding=4, on_change=self.change_view)
         header = ft.Row([
             ft.Container(brand(48), expand=True, alignment=ft.alignment.center_left),
-            self.theme_button, self.settings_button,
+            self.account_button, self.theme_button, self.settings_button,
         ], spacing=4)
         self.start_button = ft.FilledButton("Get started", icon=ft.Icons.ARROW_FORWARD, height=54, width=300, on_click=self.get_started)
         self.welcome_status = ft.Text("", size=12, color=MUTED, visible=False)
@@ -539,7 +607,10 @@ class AriaApp:
             ft.Container(height=12),
             self.start_button,
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=20)
-        self.voices_view = ft.Column([ft.Text("Your voice", size=26, weight=ft.FontWeight.W_500), voice_card], spacing=12, visible=False)
+        self.use_aria_button = ft.FilledButton("Use ARIA Voice", icon=ft.Icons.RECORD_VOICE_OVER, height=52, on_click=self.use_aria_voice)
+        self.builtin_note = ft.Text("A generic synthetic voice. No personal recording is needed; licensed reference setup and Colab are required.", size=12, color=MUTED)
+        self.voices_view = ft.Column([ft.Text("Choose how to speak", size=26, weight=ft.FontWeight.W_500),
+            self.use_aria_button, self.builtin_note, ft.Text("Use My Voice", size=20, weight=ft.FontWeight.W_500), voice_card], spacing=12, visible=False)
         self.voice_continue = ft.FilledButton("Continue to speaking", icon=ft.Icons.ARROW_FORWARD,
             height=54, expand=True, on_click=self.continue_speaking)
         self.voice_actions = ft.Row([self.voice_continue], visible=False)
@@ -650,6 +721,33 @@ class AriaApp:
     async def show_voices(self, event=None):
         if not self.busy:
             self.show_screen("voices")
+
+    async def use_aria_voice(self, event=None):
+        if self.busy:
+            return
+        self.voice.value = "aria_builtin"
+        self.navigation.selected_index = 0
+        self.show_screen("compose")
+        self.update_controls()
+        profile = self.selected_voice()
+        if not profile or not profile.get("available", False):
+            self.say_status("ARIA Default Voice needs a licensed synthetic reference configured on the backend. No personal recording is required.", error=True)
+
+    async def expression_changed(self, event=None):
+        self.expression_note.value = ("Manual expression selected. A missing style reference uses a clearly reported neutral fallback."
+            if self.expression.value != "auto" else "Automatic suggestions never override an explicitly selected expression.")
+        self.phrase_signature = None
+        self.phrase_expression_label.value = "Expression · " + self.expression.value.title()
+        self.phrase_expression_note.value = self.expression_note.value
+        if self.screen == "library":
+            await self.load_phrase_bank()
+        self.update()
+
+    async def copy_message(self, event=None):
+        text = self.preview.value if self.native_override or self.preview_phase == "complete" else self.input.value
+        if (text or "").strip():
+            self.page.set_clipboard(text)
+            self.say_status("Message copied.")
 
     async def continue_speaking(self, event=None):
         if self.busy:
@@ -784,20 +882,22 @@ class AriaApp:
         self.native_count.value = f"{len(self.preview.value or '')} / {self.settings.max_text_chars}"
         self.mode_pill.disabled = self.language_pills.disabled = self.busy
         selected = self.selected_voice()
-        valid_voice = selected is not None and not selected.get("needs_reenrollment", False)
-        authorized = self.security_mode != "strict" or self.client.session_valid(self.voice.value)
+        valid_voice = selected is not None and not selected.get("needs_reenrollment", False) and selected.get("available", True)
+        if selected and self.workflow_mode == "assistive" and selected.get("authorization_status") in {"review_required", "revoked"}:
+            valid_voice = False
+        authorized = self.workflow_mode != "research" or self.security_mode != "strict" or self.voice.value == "aria_builtin" or self.client.session_valid(self.voice.value)
         speech_text = self.preview.value if self.native_override else self.input.value
         self.speak_button.disabled = self.busy or not (speech_text or "").strip() or not valid_voice or not authorized
-        self.verify_button.visible = self.security_mode != "off"
+        self.verify_button.visible = self.workflow_mode == "research" and self.security_mode != "off" and self.voice.value != "aria_builtin"
         self.verify_button.disabled = self.busy or not valid_voice
         self.emotion_button.visible = self.emotion_enabled
-        self.emotion_button.disabled = self.busy or not valid_voice or not authorized
+        self.emotion_button.disabled = self.busy or not valid_voice or not authorized or self.voice.value == "aria_builtin"
         self.safety_note.value = ("Verify this voice before speaking." if self.security_mode == "strict" and not authorized
                                  else "Voice verification is optional." if self.security_mode == "basic" else "")
         self.safety_note.visible = bool(self.safety_note.value)
         self.safety_actions.visible = self.verify_button.visible or self.emotion_button.visible
         self.voice_continue.disabled = self.busy
-        for control in (self.voice, self.enroll_button, self.refresh_button, self.settings_button, self.speed, self.mode, self.language):
+        for control in (self.voice, self.enroll_button, self.refresh_button, self.settings_button, self.speed, self.mode, self.language, self.expression, self.phrase_expression, self.account_button, self.use_aria_button):
             control.disabled = self.busy
         self.progress.visible = self.busy
         self.stop_button.disabled = self.audio is None
@@ -806,6 +906,12 @@ class AriaApp:
             control.disabled = self.busy or (needs_voice and (not valid_voice or not authorized))
         self.voice_note.value = ("This voice needs a new recording. Enroll it again." if selected and not valid_voice
                                  else "Long recordings are supported. Use one clear speaker." if not self.voices else "")
+        if selected and selected.get("kind") == "builtin" and not selected.get("available"):
+            self.voice_note.value = "ARIA Default Voice is not configured. Supply a licensed synthetic reference manifest on the backend."
+        elif selected and selected.get("authorization_status") == "review_required" and self.workflow_mode == "assistive":
+            self.voice_note.value = "This older profile needs authorized re-enrollment to record provenance and checkpoint compatibility. Existing data is preserved."
+        elif selected and selected.get("authorization_status") == "revoked":
+            self.voice_note.value = "Authorization for this voice was revoked. Use ARIA Voice or another currently authorized profile."
         self.voice_note.visible = bool(self.voice_note.value)
         self.library_voice.value = (f'{self.language_names.get(self.language.value, self.language.value)} · {selected["name"]}' if selected
                                     else "Choose a voice to speak your phrases.")
@@ -957,12 +1063,23 @@ class AriaApp:
             self.voices = await self.client.voices()
             self.voice.options = [ft.dropdown.Option(v["id"], v["name"] +
                 (" · needs re-enrollment" if v.get("needs_reenrollment") else "")) for v in self.voices]
-            compatible = [v["id"] for v in self.voices if not v.get("needs_reenrollment")]
+            compatible = [v["id"] for v in self.voices if not v.get("needs_reenrollment") and v.get("available", True)]
             previous = preferred or self.voice.value
             self.voice.value = previous if previous in compatible else (compatible[0] if compatible else None)
             health = await self.client.health()
             self.backend_ready = True
             self.security_mode = health.get("security_mode", "off")
+            self.workflow_mode = health.get("workflow_mode", "assistive")
+            research_audio = self.workflow_mode == "research" and health.get("watermark_policy") == "research_unprotected"
+            for note in (self.protection_note, self.library_protection_note):
+                note.value = "Research mode · audio may be unprotected. Not normal deployment." if research_audio else "Required audio protection · unverified output is withheld."
+                note.color = RED if research_audio else MUTED
+            if hasattr(self.client, "account"):
+                self.access_state = await self.client.account()
+            built = health.get("builtin_voice", {})
+            if built:
+                self.builtin_note.value = ("Generic synthetic voice ready to initialize. New speech still needs Colab."
+                    if built.get("available") else "Not configured yet: a licensed synthetic reference is needed on the backend. Do not upload another person's recording as the generic voice.")
             self.emotion_enabled = health.get("emotion_enabled", False)
             self.api_translit_enabled = health.get("transliteration", {}).get("api_enabled", False)
             catalog = health.get("languages", {})
@@ -1024,12 +1141,15 @@ class AriaApp:
         self.update_controls()
         self.say_status("Preparing your voice…")
         try:
-            raw, urdu = await self.client.speak(text, selected["id"], float(self.speed.value), speech_mode, self.language.value)
+            raw, urdu = await self.client.speak(text, selected["id"], float(self.speed.value), speech_mode, self.language.value, self.expression.value)
             if self.closed:
                 return
             if self.revision == revision and urdu:
                 self.preview.value, self.preview_note.value = urdu, "Text sent to your voice."
             self.play_audio(raw)
+            expression = getattr(self.client, "last_expression", {})
+            self.expression_note.value = ("The selected style has no suitable reference; this output uses neutral expression."
+                if expression.get("method") == "neutral_fallback" else "Reference-conditioned expression; perceived emotion is not yet clinically or listener validated.")
             await self.load_phrase_bank()
         except AppError as error:
             self.say_status(str(error), error=True)
@@ -1105,14 +1225,46 @@ class AriaApp:
         self.choose_button = ft.OutlinedButton("Choose audio", icon=ft.Icons.AUDIO_FILE, height=52, on_click=self.choose_file)
         self.save_voice_button = ft.ElevatedButton("Enroll", height=52, on_click=self.save_voice)
         self.cancel_enroll_button = ft.TextButton("Cancel", height=52, on_click=self.close_dialog)
+        self.enroll_source = ft.Dropdown(label="Recording source", value="historical", options=[
+            ft.dropdown.Option("historical", "Historical recording"), ft.dropdown.Option("current", "Existing current recording")])
+        self.enroll_basis = ft.Dropdown(label="Authorization basis", value="patient_consent", options=[
+            ft.dropdown.Option("patient_consent", "Patient consent"),
+            ft.dropdown.Option("authorized_representative", "Authorized representative process")])
+        self.enroll_reference = ft.TextField(label="Authorization reference", hint_text="Brief basis/reference; do not upload sensitive documents", max_length=240)
+        self.enroll_confirm = ft.Checkbox(label="I confirm appropriate authorization for this person's voice. A recording alone is not consent.", value=False)
+        self.enroll_grant = ft.TextField(label="Existing patient authorization ID (for caregiver import)")
+        self.grant_button = ft.TextButton("Create authorization only", on_click=self.create_enrollment_grant)
         self.dialog = ft.AlertDialog(modal=True, title=ft.Text("Enroll your voice"), content=ft.Column([
             ft.Text(self.reference_help()), self.enroll_name,
             self.choose_button, self.file_label,
-            ft.Text("Record in another app and select the file here. Conversion happens locally on your backend.", size=13, color=MUTED),
+            ft.Text("Use an authorized historical recording. You do not need to speak or record a new sample.", size=13, color=MUTED),
+            self.enroll_source, self.enroll_basis, self.enroll_reference, self.enroll_confirm, self.enroll_grant, self.grant_button,
             self.enroll_error,
         ], tight=True, width=400, scroll=ft.ScrollMode.AUTO),
             actions=[self.cancel_enroll_button, self.save_voice_button])
         self.page.open(self.dialog)
+
+    async def enrollment_authorization(self):
+        existing = (self.enroll_grant.value or "").strip()
+        if existing:
+            return existing
+        if not self.enroll_confirm.value or not (self.enroll_reference.value or "").strip():
+            raise AppError("Confirm the authorization basis and reference, or supply a patient-issued authorization ID.")
+        return await self.client.authorize_recording(self.selected_file, self.enroll_source.value,
+            self.enroll_basis.value, self.enroll_reference.value.strip())
+
+    async def create_enrollment_grant(self, event=None):
+        if self.busy or self.selected_file is None:
+            return
+        self.busy = True
+        try:
+            self.enroll_grant.value = await self.enrollment_authorization()
+            self.enroll_error.value = "Authorization created for this exact file. A scoped caregiver may use this ID."
+        except AppError as error:
+            self.enroll_error.value = str(error)
+        finally:
+            self.busy = False
+            self.update_controls()
 
     def reference_help(self):
         minutes = self.reference_limits["max_source_seconds"] / 60
@@ -1163,7 +1315,8 @@ class AriaApp:
         self.enroll_error.value = "Creating your voice profile…"
         self.update_controls()
         try:
-            identifier = await self.client.enroll(self.selected_file, name)
+            grant = await self.enrollment_authorization()
+            identifier = await self.client.enroll(self.selected_file, name, grant)
         except AppError as error:
             self.enroll_error.value = str(error)
         else:
@@ -1181,6 +1334,8 @@ class AriaApp:
 
     async def close_dialog(self, event=None):
         if not self.busy and self.dialog:
+            if self.dialog_kind == "account":
+                self.account_pin.value = self.account_recovery.value = self.account_result.value = ""
             self.page.close(self.dialog)
             self.selected_file = None
             self.dialog_kind = None
@@ -1242,10 +1397,17 @@ class AriaApp:
         self.emotion_submit = ft.ElevatedButton("Save reference", height=52, on_click=self.save_emotion)
         self.emotion_cancel = ft.TextButton("Cancel", height=52, on_click=self.close_dialog)
         self.emotion_choose = ft.OutlinedButton("Choose reference audio", height=52, on_click=self.choose_file)
+        self.enroll_source = ft.Dropdown(label="Recording source", value="historical", options=[ft.dropdown.Option("historical", "Historical recording"), ft.dropdown.Option("current", "Existing current recording")])
+        self.enroll_basis = ft.Dropdown(label="Authorization basis", value="patient_consent", options=[ft.dropdown.Option("patient_consent", "Patient consent"), ft.dropdown.Option("authorized_representative", "Authorized representative process")])
+        self.enroll_reference = ft.TextField(label="Authorization reference", max_length=240)
+        self.enroll_confirm = ft.Checkbox(label="This recording has appropriate authorization for the same voice owner.", value=False)
+        self.enroll_grant = ft.TextField(label="Patient authorization ID (if provided)")
         self.dialog = ft.AlertDialog(modal=True, title=ft.Text("Add emotion reference"), content=ft.Column([
             ft.Container(height=8), self.emotion_tag,
             ft.Text(self.reference_help() + " This replaces the selected style's previous reference."),
             self.emotion_choose, self.file_label, self.enroll_error,
+            self.enroll_source, self.enroll_basis, self.enroll_reference, self.enroll_confirm, self.enroll_grant,
+            ft.Text("Use existing authorized audio; no patient is required to record new emotion samples.", size=12, color=MUTED),
             ft.Text("XTTS has no native emotion control. Any effect depends on the reference clip and may be subtle.", size=12, color=MUTED),
         ], width=440, tight=True, scroll=ft.ScrollMode.AUTO), actions=[self.emotion_cancel, self.emotion_submit])
         self.page.open(self.dialog)
@@ -1259,7 +1421,8 @@ class AriaApp:
         self.enroll_error.value = "Preparing the reference…"
         self.update_controls()
         try:
-            await self.client.add_emotion(self.voice.value, self.emotion_tag.value, self.selected_file)
+            grant = await self.enrollment_authorization()
+            await self.client.add_emotion(self.voice.value, self.emotion_tag.value, self.selected_file, grant)
             self.page.close(self.dialog)
             self.selected_file = None
             await self.load_phrase_bank()
@@ -1290,6 +1453,94 @@ class AriaApp:
             ft.TextButton("Cancel", height=52, on_click=self.close_dialog),
             ft.ElevatedButton("Save & connect", height=52, on_click=self.save_settings)])
         self.page.open(self.dialog)
+
+    async def open_account(self, event=None):
+        if self.busy:
+            return
+        try:
+            status = await self.client.account()
+        except AppError as error:
+            self.say_status(str(error), error=True)
+            return
+        self.access_state = status
+        self.dialog_kind = "account"
+        self.account_id = ft.TextField(label="Account ID", value="patient")
+        self.account_pin = ft.TextField(label="PIN (6–12 digits)", password=True, can_reveal_password=True)
+        self.account_recovery = ft.TextField(label="Recovery code (recovery only)", password=True, can_reveal_password=True)
+        self.account_result = ft.Text("", selectable=True, size=13)
+        self.caregiver_permissions = [ft.Checkbox(label=name, value=False) for name in ("speak", "enroll", "manage")]
+        self.caregiver_rows = ft.Column(spacing=4)
+        self.account_dialog = ft.AlertDialog(modal=True, title=ft.Text("Accessible local account"),
+            content=ft.Column([ft.Text("The device key protects this installation. A PIN adds a speech-free account lock. Caregiver login does not grant patient consent."),
+                self.account_id, self.account_pin, self.account_recovery,
+                ft.Row([ft.TextButton("Unlock", on_click=self.unlock_account), ft.TextButton("Set patient PIN", on_click=self.setup_account),
+                    ft.TextButton("Lock", on_click=self.lock_account), ft.TextButton("Recover", on_click=self.recover_account)], wrap=True),
+                ft.Divider(), ft.Text("Patient: create scoped caregiver access using the PIN above."),
+                ft.Row(self.caregiver_permissions, wrap=True), ft.TextButton("Add caregiver", on_click=self.add_caregiver_account),
+                self.caregiver_rows, self.account_result], tight=True, width=400, scroll=ft.ScrollMode.AUTO),
+            actions=[ft.TextButton("Close", on_click=self.close_dialog)])
+        self.dialog = self.account_dialog
+        if (status.get("actor") or {}).get("role") == "patient":
+            try:
+                for item in await self.client.account("caregivers"):
+                    if not item["active"]:
+                        continue
+                    async def revoke(event, identifier=item["id"]):
+                        try:
+                            await self.client.revoke_caregiver(identifier)
+                            self.account_result.value = "Caregiver access revoked."
+                            event.control.disabled = True
+                            self.update()
+                        except AppError as error:
+                            self.account_result.value = str(error)
+                            self.update()
+                    self.caregiver_rows.controls.append(ft.TextButton("Revoke " + item["id"], on_click=revoke))
+            except AppError:
+                pass
+        self.page.open(self.dialog)
+
+    async def account_action(self, action):
+        if self.busy:
+            return
+        self.busy = True
+        self.update_controls()
+        try:
+            values = {}
+            if action in {"setup", "login"}:
+                values = {"actor_id": self.account_id.value or "patient", "pin": self.account_pin.value or ""}
+            elif action == "recover":
+                values = {"recovery_code": self.account_recovery.value or "", "pin": self.account_pin.value or ""}
+            elif action == "caregivers":
+                values = {"pin": self.account_pin.value or "", "permissions": [c.label for c in self.caregiver_permissions if c.value]}
+            result = await self.client.account(action, **values)
+            self.account_pin.value = self.account_recovery.value = ""
+            if result.get("recovery_code"):
+                self.account_result.value = "Save this recovery code privately; it is shown only now:\n" + result["recovery_code"]
+            elif action == "caregivers":
+                self.account_result.value = "Caregiver account: " + result["actor_id"] + ". Only selected permissions were granted."
+            else:
+                self.account_result.value = "Account locked." if action == "logout" else "Account unlocked."
+            await self.refresh()
+        except AppError as error:
+            self.account_result.value = str(error)
+        finally:
+            self.busy = False
+            self.update_controls()
+
+    async def unlock_account(self, event=None):
+        await self.account_action("login")
+
+    async def setup_account(self, event=None):
+        await self.account_action("setup")
+
+    async def lock_account(self, event=None):
+        await self.account_action("logout")
+
+    async def recover_account(self, event=None):
+        await self.account_action("recover")
+
+    async def add_caregiver_account(self, event=None):
+        await self.account_action("caregivers")
 
     async def save_settings(self, event=None):
         if self.busy:
@@ -1379,7 +1630,7 @@ class AriaApp:
             if self.phrase_language != language:
                 self.phrase_status.value = f"Preparing phrases in {self.language_names.get(language, language)}…"
                 self.update()
-            result = await self.client.phrases(voice_id, float(self.speed.value), language)
+            result = await self.client.phrases(voice_id, float(self.speed.value), language, self.expression.value)
             if self.closed or revision != self.phrase_revision or language != self.language.value:
                 return
             self.phrases = result["items"]
@@ -1387,7 +1638,7 @@ class AriaApp:
             ready = sum(bool(p.get("cached")) for p in self.phrases)
             self.phrase_status.value = (f"{len(self.phrases)} phrases · {ready} ready offline" if voice_id else "Choose a voice to speak these phrases.")
             # Polling must not recreate every button and reset scrolling when nothing changed.
-            signature = repr((language, voice_id, self.speed.value, self.phrases))
+            signature = repr((language, voice_id, self.speed.value, self.expression.value, self.phrases))
             if signature != self.phrase_signature:
                 self.phrase_signature = signature
                 self.render_phrase_grid()
@@ -1451,9 +1702,12 @@ class AriaApp:
         self.update_controls()
         self.say_status("Preparing your phrase…")
         try:
-            raw, urdu = await self.client.speak_phrase(identifier, self.voice.value, float(self.speed.value), self.language.value)
+            raw, urdu = await self.client.speak_phrase(identifier, self.voice.value, float(self.speed.value), self.language.value, self.expression.value)
             if not self.closed:
                 self.play_audio(raw)
+                expression = getattr(self.client, "last_expression", {})
+                self.phrase_expression_note.value = ("No matching style reference is available; this phrase uses neutral expression."
+                    if expression.get("method") == "neutral_fallback" else "Reference-conditioned expression; listener evaluation is still required.")
                 self.say_status("Playing your phrase.")
                 await self.load_phrase_bank()
         except AppError as error:

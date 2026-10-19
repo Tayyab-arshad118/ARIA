@@ -41,6 +41,9 @@ def main():
     parser.add_argument("--backend", default="http://127.0.0.1:8001")
     parser.add_argument("--output", type=Path, default=Path("evaluation.csv"))
     parser.add_argument("--allow-model-downloads", action="store_true")
+    parser.add_argument("--wav-directory", type=Path, help="Evaluate existing clips instead of calling TTS; rows may name audio_file")
+    parser.add_argument("--language", default="ur")
+    parser.add_argument("--emotion", choices=["neutral", "happy", "sad", "angry", "calm", "auto"], default="neutral")
     args = parser.parse_args()
     settings = Settings()
     # dotenv loads these evaluator-only settings without replacing environment values.
@@ -78,14 +81,25 @@ def main():
     headers = {"Authorization": "Bearer " + settings.aria_key.get_secret_value()} if settings.aria_key.get_secret_value() else {}
     if values.get("LIVENESS_SESSION_TOKEN"):
         headers["X-ARIA-Session"] = values["LIVENESS_SESSION_TOKEN"]
+    if values.get("ARIA_ACCOUNT_TOKEN"):
+        headers["X-ARIA-Account"] = values["ARIA_ACCOUNT_TOKEN"]
     rows, distances, characters = [], 0, 0
     with httpx.Client(base_url=args.backend, headers=headers, timeout=settings.gpu_timeout_seconds * 4,
                       follow_redirects=False, trust_env=False) as client:
         for index, row in enumerate(records, 1):
-            response = client.post("/api/tts", json={"text": row["text"], "voice_id": args.voice_id})
-            if response.status_code != 200:
-                parser.exit(1, f"Sentence {index} failed (HTTP {response.status_code}); no metrics fabricated.\n")
-            audio, sr = sf.read(io.BytesIO(response.content), dtype="float32", always_2d=True)
+            if args.wav_directory:
+                directory = args.wav_directory.resolve()
+                path = (directory / row.get("audio_file", f"{index}.wav")).resolve()
+                if directory not in path.parents or not path.is_file():
+                    parser.error("Each audio_file must be an existing file inside --wav-directory")
+                raw = path.read_bytes()
+            else:
+                response = client.post("/api/tts", json={"text": row["text"], "voice_id": args.voice_id,
+                    "language": args.language, "emotion": args.emotion})
+                if response.status_code != 200 or response.headers.get("x-aria-watermark") != "verified":
+                    parser.exit(1, f"Sentence {index} speech/protection failed; no metrics fabricated.\n")
+                raw = response.content
+            audio, sr = sf.read(io.BytesIO(raw), dtype="float32", always_2d=True)
             audio_16k = resample(audio.mean(axis=1), sr, 16000)
             segments, _ = asr.transcribe(audio_16k, language=values.get("EVAL_ASR_LANGUAGE", "ur"), beam_size=5)
             transcript = " ".join(segment.text.strip() for segment in segments)
@@ -105,8 +119,7 @@ def main():
         writer.writerows(rows)
     summary = {"sentences": len(rows), "corpus_cer": distances / characters,
                "mean_speaker_similarity": sum(r["speaker_similarity"] for r in rows) / len(rows),
-               "provided_base_xtts_baseline": {"cer": 0.486, "speaker_similarity": 0.522, "sentences": 8},
-               "comparison_note": "Only comparable with the same sentences, references, ASR model, and normalization"}
+               "comparison_note": "No baseline is fabricated. Compare separately measured runs with the same held-out speakers, sentences, references, ASR model and normalization."}
     args.output.with_suffix(".summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(summary, indent=2))
 

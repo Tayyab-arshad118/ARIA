@@ -34,7 +34,7 @@ def test_phrase_cards_speech_and_audio_cache_use_selected_language(bank, monkeyp
     assert not any(p["cached"] for p in cards.json()["items"])
     seen = []
     original = gpu.synthesize
-    async def synthesize(text, latents, speed, language=None):
+    async def synthesize(text, latents, speed, language=None, temperature=None):
         seen.append((text, language))
         return await original(text, latents, speed, language=language)
     gpu.synthesize = synthesize

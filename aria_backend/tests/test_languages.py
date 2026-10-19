@@ -34,7 +34,7 @@ def test_languages_bypass_transliteration_and_cache_separately(backend, monkeypa
     advertise(gpu)
     received = []
     original = gpu.synthesize
-    async def synthesize(text, latents, speed, language=None):
+    async def synthesize(text, latents, speed, language=None, temperature=None):
         received.append((text, language))
         return await original(text, latents, speed, language=language)
     gpu.synthesize = synthesize

@@ -61,7 +61,7 @@ class EmotionGPU(FakeGPU):
 
 @pytest.fixture
 def safe(tmp_path):
-    settings = Settings(_env_file=None, data_dir=tmp_path, security_mode="strict", watermark_enabled=True,
+    settings = Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path, security_mode="strict", watermark_enabled=True,
                         emotion_enabled=True, phrase_prewarm_enabled=False)
     verification, watermark, gpu = Verification(), Watermark(), EmotionGPU()
     app = create_app(settings, gpu=gpu, verification_engine=verification, watermark_engine=watermark)
@@ -97,12 +97,12 @@ def test_strict_gates_tts_and_phrase_cache_hits(safe):
                         ("/api/phrases/needs-1/speak", {"voice_id": voice})):
         first = client.post(path, json=body, headers=headers)
         assert first.status_code == 200
-        assert first.headers["x-aria-generated"] == "true" and first.headers["x-aria-watermark"] == "embedded"
+        assert first.headers["x-aria-generated"] == "true" and first.headers["x-aria-watermark"] == "verified"
         count = len(gpu.calls)
         assert client.post(path, json=body, headers=headers).status_code == 200
         assert len(gpu.calls) == count
         assert client.post(path, json=body).status_code == 403
-    assert watermark.calls == 4
+    assert watermark.calls == 2  # cache hits validate, never embed a second watermark
     repeat = client.post("/api/liveness/verify", files={"file": ("r.wav", reference())},
                          data={"challenge_id": challenge["challenge_id"]})
     assert repeat.status_code == 410
@@ -164,14 +164,13 @@ def test_token_expiring_during_synthesis_is_rejected(safe):
     assert client.post("/api/tts", json={"text": "pani", "voice_id": voice}, headers=headers).status_code == 403
 
 
-def test_watermark_failure_degrades_and_detection_reports_unavailable(safe, caplog):
+def test_watermark_failure_withholds_audio_and_detection_reports_unavailable(safe, caplog):
     client, app, verifier, watermark, gpu = safe
     voice = enroll(client)
     headers, _ = verified(client, verifier, voice)
     watermark.fail = True
     response = client.post("/api/tts", json={"text": "pani"}, headers=headers)
-    assert response.status_code == 200 and response.headers["x-aria-watermark"] == "unavailable"
-    assert response.content.startswith(b"RIFF") and response.headers["x-aria-generated"] == "true"
+    assert response.status_code == 503 and not response.content.startswith(b"RIFF")
     assert "audioseal_unavailable" in caplog.text and "private" not in caplog.text
     result = client.post("/api/watermark/detect", files={"file": ("a.wav", reference())})
     assert result.status_code == 503 and "private" not in result.text
@@ -192,10 +191,11 @@ def test_emotion_reference_update_invalidates_cache_and_matches_speaker(safe):
     client, app, verifier, watermark, gpu = safe
     voice = enroll(client)
     headers, _ = verified(client, verifier, voice)
-    spoken = {"text": "میں خوش ہوں", "voice_id": voice}
+    spoken = {"text": "میں خوش ہوں", "voice_id": voice, "emotion": "happy"}
     first = client.post("/api/tts", json=spoken, headers=headers)
-    assert first.status_code == 200 and first.headers["x-aria-emotion"] == "happy"
-    assert gpu.calls[-1][1] == 1.05 and gpu.temperatures[-1] == 0.68
+    assert first.status_code == 200 and first.headers["x-aria-emotion"] == "neutral"
+    assert first.headers["x-aria-emotion-method"] == "neutral_fallback"
+    assert gpu.calls[-1][1] == 1.0 and gpu.temperatures[-1] == 0.65
     count = len(gpu.calls)
     client.post("/api/tts", json=spoken, headers=headers)
     assert len(gpu.calls) == count
@@ -204,6 +204,7 @@ def test_emotion_reference_update_invalidates_cache_and_matches_speaker(safe):
     assert client.get(f"/api/voices/{voice}/emotions").json()[0]["emotion"] == "happy"
     client.post("/api/tts", json=spoken, headers=headers)
     assert len(gpu.calls) == count + 1
+    assert gpu.calls[-1][1] == 1.05 and gpu.temperatures[-1] == 0.68
     with app.state.db.session() as session:
         assert session.get(EmotionReference, (voice, "happy")).raw_audio is None
     verifier.vector = np.array([0, 1.0, 0])
@@ -212,13 +213,13 @@ def test_emotion_reference_update_invalidates_cache_and_matches_speaker(safe):
 
 
 def test_disabled_and_basic_modes(tmp_path):
-    settings = Settings(_env_file=None, data_dir=tmp_path, phrase_prewarm_enabled=False)
+    settings = Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path, phrase_prewarm_enabled=False)
     app = create_app(settings, gpu=FakeGPU(), verification_engine=Verification())
     with TestClient(app) as client:
         voice = client.post("/api/voices", files={"file": ("ref.wav", reference())}, data={"name": "Old"}).json()["id"]
         assert client.post("/api/liveness/challenge", json={"voice_id": voice}).status_code == 409
         response = client.post("/api/tts", json={"text": "pani"})
-        assert response.status_code == 200 and response.headers["x-aria-watermark"] == "disabled"
+        assert response.status_code == 200 and response.headers["x-aria-watermark"] == "research_unprotected"
         settings.security_mode = "basic"
         assert client.post("/api/liveness/challenge", json={"voice_id": voice}).status_code == 409
         assert client.post("/api/tts", json={"text": "pani"}).status_code == 200
@@ -253,24 +254,24 @@ def test_challenge_expiring_during_cpu_verification_cannot_grant_token(safe):
     assert result.status_code == 410 and not app.state.liveness.sessions
 
 
-def test_missing_models_fail_closed_and_watermark_falls_back(tmp_path):
-    settings = Settings(_env_file=None, data_dir=tmp_path, security_mode="strict", watermark_enabled=True,
+def test_missing_models_fail_closed_for_verification_and_watermark(tmp_path):
+    settings = Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path, security_mode="strict", watermark_enabled=True,
         liveness_speaker_path=tmp_path / "missing", watermark_generator_path=tmp_path / "missing.pth",
         watermark_detector_path=tmp_path / "missing2.pth", phrase_prewarm_enabled=False)
     app = create_app(settings, gpu=FakeGPU())
     with TestClient(app) as client:
         result = client.post("/api/voices", files={"file": ("ref.wav", reference())}, data={"name": "Test"})
         assert result.status_code == 503
-        assert client.get("/api/voices").json() == []
+        assert [v["id"] for v in client.get("/api/voices").json()] == ["aria_builtin"]
         settings.security_mode = "off"
         assert client.post("/api/voices", files={"file": ("ref.wav", reference())}, data={"name": "Test"}).status_code == 201
         response = client.post("/api/tts", json={"text": "pani"})
-        assert response.status_code == 200 and response.headers["x-aria-watermark"] == "unavailable"
+        assert response.status_code == 503
 
 
 def test_invalid_settings_do_not_echo_credentials():
     with pytest.raises(ValueError) as error:
-        Settings(_env_file=None, colab_url="https://user:private-key@example.com", groq_api_key="private-groq-key")
+        Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", colab_url="https://user:private-key@example.com", groq_api_key="private-groq-key")
     assert "private-key" not in str(error.value) and "private-groq-key" not in str(error.value)
 
 

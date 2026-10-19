@@ -35,3 +35,7 @@ For a particular failure, use `-k` with a test-name fragment. Keep new fixtures 
 Passing tests support the software contracts and error paths. They do not verify the real user's checkpoint, the acoustic quality of cloning, actual AudioSeal/Whisper/ECAPA accuracy, or production deployment behavior. Those need separate integration and listening checks.
 
 For UI behavior see [desktop tests](../../aria_desktop/tests/README.md); for GPU notebook contracts see [root tests](../../tests/README.md).
+
+## Assistive regressions
+
+[test_assistive.py](test_assistive.py) covers generic provider persistence, consent/scope/recovery, native Urdu, checkpoint identity, manual expression and protected cache failures. [test_research_tools.py](test_research_tools.py) checks evaluation accounting without inventing model or listener outcomes. Legacy experimental fixtures explicitly select research policy.

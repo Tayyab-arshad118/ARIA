@@ -18,7 +18,7 @@ from test_api import FakeGPU, reference
 
 @pytest.fixture
 def bank(tmp_path):
-    settings = Settings(_env_file=None, data_dir=tmp_path, phrase_prewarm_enabled=False)
+    settings = Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path, phrase_prewarm_enabled=False)
     gpu = FakeGPU()
     app = create_app(settings, gpu=gpu)
     with TestClient(app) as client:
@@ -108,7 +108,7 @@ def test_history_learning_failure_and_delete_all(bank):
 
 
 def test_seed_deletion_and_history_survive_restart(tmp_path):
-    settings = Settings(_env_file=None, data_dir=tmp_path, phrase_prewarm_enabled=False)
+    settings = Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path, phrase_prewarm_enabled=False)
     with TestClient(create_app(settings, gpu=FakeGPU())) as client:
         voice = enroll(client)
         assert client.delete("/api/phrases/needs-1").status_code == 204
@@ -157,7 +157,7 @@ def two_seeds(tmp_path):
 
 def test_background_warming_cache_hits_and_deletion_race(tmp_path):
     async def run():
-        settings = Settings(_env_file=None, data_dir=tmp_path / "db", phrase_seed_path=two_seeds(tmp_path),
+        settings = Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path / "db", phrase_seed_path=two_seeds(tmp_path),
                             phrase_prewarm_enabled=False)
         gpu = FakeGPU()
         app = create_app(settings, gpu=gpu)
@@ -192,7 +192,7 @@ def test_background_warming_cache_hits_and_deletion_race(tmp_path):
 
 def test_automatic_warming_and_regeneration_after_edit(tmp_path):
     async def run():
-        settings = Settings(_env_file=None, data_dir=tmp_path / "db", phrase_seed_path=two_seeds(tmp_path),
+        settings = Settings(_env_file=None, workflow_mode="research", watermark_policy="research_unprotected", data_dir=tmp_path / "db", phrase_seed_path=two_seeds(tmp_path),
                             phrase_prewarm_enabled=True)
         gpu = FakeGPU()
         app = create_app(settings, gpu=gpu)

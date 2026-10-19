@@ -98,7 +98,7 @@ def runtime(monkeypatch):
     ns.update(
         torch=SimpleNamespace(cuda=cuda, no_grad=nullcontext, from_numpy=Tensor),
         model=FakeModel(), GPT_CHANNELS=8, SPEAKER_DIM=4, MAX_MODEL_TEXT_TOKENS=400, OUTPUT_SR=24000,
-        SUPPORTED_LANGUAGES=["ar", "en"],
+        SUPPORTED_LANGUAGES=["ar", "en"], MODEL_FINGERPRINT="a" * 64,
     )
     exec(compile(source("api"), "notebook-api", "exec"), ns)
     with TestClient(ns["app"], raise_server_exceptions=False) as client:
@@ -147,7 +147,7 @@ def test_all_endpoints_require_key(runtime, route, method):
 
 def test_health_contract(runtime):
     assert runtime.client.get("/health", headers=runtime.headers).json() == {
-        "ok": True, "gpu": "Mock T4", "lang": "ar", "languages": ["ar", "en"]
+        "ok": True, "gpu": "Mock T4", "lang": "ar", "languages": ["ar", "en"], "model_fingerprint": "a" * 64
     }
 
 
@@ -304,6 +304,13 @@ def test_selected_model_language_is_forwarded_and_unknown_rejected(runtime):
     body["language"] = "zz"
     assert runtime.client.post("/synthesize", headers=runtime.headers, json=body).status_code == 422
     assert len(runtime.ns["model"].calls) == 1
+
+
+def test_checkpoint_fingerprint_mismatch_rejected_before_inference(runtime):
+    response = runtime.client.post("/synthesize", headers=runtime.headers,
+        json={**payload(), "model_fingerprint": "b" * 64})
+    assert response.status_code == 409
+    assert not runtime.ns["model"].calls
 
 
 def test_token_limit(runtime):
