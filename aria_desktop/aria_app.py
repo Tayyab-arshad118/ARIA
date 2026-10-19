@@ -637,7 +637,7 @@ class AriaApp:
                         ft.OutlinedButton("English", on_click=self.onboarding_english)], wrap=True),
                 ft.Text("Available speech languages depend on your connected model.", size=12, color=MUTED),
             ], spacing=16)),
-            ft.Container(expand=True),
+            ft.Container(height=30),
             ft.FilledButton("Continue", icon=ft.Icons.ARROW_FORWARD, height=54,
                             on_click=self.onboarding_language_continue),
         ], spacing=14, visible=False)
@@ -658,7 +658,7 @@ class AriaApp:
             ], spacing=4), padding=12),
             ft.Text("Consent for recording is collected separately before enrollment.",
                     color=MUTED, size=12),
-            ft.Container(expand=True),
+            ft.Container(height=30),
             ft.FilledButton("Choose a voice", icon=ft.Icons.ARROW_FORWARD, height=54,
                             on_click=self.onboarding_security_continue),
         ], spacing=14, visible=False)
@@ -729,8 +729,12 @@ class AriaApp:
             ft.Text("Personalize your speech, one setting at a time.", size=13, color=MUTED),
             card(ft.Column([
                 ft.Text("Voice", size=14, weight=ft.FontWeight.BOLD),
-                ft.Row([self.voice, self.refresh_button]),
-                self.voice_note,
+                ft.ListTile(
+                    leading=ft.Icon(ft.Icons.RECORD_VOICE_OVER, color=TEAL),
+                    title=ft.Text("Choose or add a voice"),
+                    subtitle=ft.Text("Manage saved voice profiles"),
+                    trailing=ft.Icon(ft.Icons.CHEVRON_RIGHT),
+                    on_click=self.show_voices),
                 ft.Divider(),
                 ft.Text("Expression", size=14, weight=ft.FontWeight.BOLD),
                 self.expression, self.expression_note,
