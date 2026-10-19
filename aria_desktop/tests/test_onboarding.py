@@ -19,6 +19,12 @@ def test_welcome_connect_voice_and_speak_screens():
         instance, page, backend = ui()
         assert instance.screen == "welcome" and not instance.compose_view.visible
         await instance.get_started()
+        assert instance.screen == "language_setup" and instance.language_setup_view.visible
+        await instance.onboarding_language_continue()
+        assert instance.screen == "security_setup" and instance.security_setup_view.visible
+        await instance.onboarding_security_continue()
+        assert instance.screen == "voices"
+        await instance.open_connection()
         assert instance.screen == "connection"
         captured = []
         async def connect(*args):
@@ -33,7 +39,14 @@ def test_welcome_connect_voice_and_speak_screens():
         assert instance.screen == "voices" and instance.voices_view.visible
         assert instance.colab_key_field.value == instance.groq_field.value == ""
         await instance.continue_speaking()
+        assert instance.screen == "ready" and instance.ready_view.visible
+        await instance.finish_onboarding()
         assert instance.screen == "compose" and not instance.voices_view.visible
+        assert instance.home_navigation.visible
+        await instance.open_speech_settings()
+        assert instance.screen == "speech_settings" and instance.speech_settings_view.visible
+        await instance.back_to_speaking()
+        assert instance.screen == "compose"
         await instance.open_connection()
         assert instance.screen == "connection" and not instance.compose_view.visible
         await instance.shutdown()
