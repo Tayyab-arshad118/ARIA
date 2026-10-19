@@ -32,6 +32,8 @@ def test_builtin_entry_does_not_request_enrollment_and_emotion_is_forwarded(monk
         backend.available = [{"id": "aria_builtin", "name": "ARIA Default Voice", "kind": "builtin", "available": True, "needs_reenrollment": False}]
         await instance.refresh()
         await instance.use_aria_voice()
+        assert instance.screen == "ready"
+        await instance.finish_onboarding()
         assert instance.screen == "compose" and instance.voice.value == "aria_builtin"
         assert not backend.enrolled and not instance.verify_button.visible
         instance.expression.value = "sad"
