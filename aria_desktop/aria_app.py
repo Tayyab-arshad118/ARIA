@@ -574,11 +574,10 @@ class AriaApp:
             ft.Row([self.mode_pill, self.char_count], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
         ], spacing=16))
         self.safety_actions = ft.Row([self.verify_button, self.emotion_button], wrap=True, visible=False)
-        voice_card = card(ft.Column([
-            ft.Text("Choose a saved voice or add a recording.", size=14, color=MUTED),
+        voice_card = ft.Column([
             ft.Row([self.voice, self.refresh_button], spacing=4), self.voice_note,
             self.enroll_button,
-        ], spacing=10))
+        ], spacing=10)
         self.conversion_note.visible = False
         self.speech_emotion_label = ft.Text("Neutral", size=13, weight=ft.FontWeight.W_500, color=INK)
         self.compose_view = ft.Column([
@@ -1392,13 +1391,24 @@ class AriaApp:
         self.enroll_confirm = ft.Checkbox(label="I confirm appropriate authorization for this person's voice. A recording alone is not consent.", value=False)
         self.enroll_grant = ft.TextField(label="Existing patient authorization ID (for caregiver import)")
         self.grant_button = ft.TextButton("Create authorization only", on_click=self.create_enrollment_grant)
-        self.dialog = ft.AlertDialog(modal=True, title=ft.Text("Enroll your voice"), content=ft.Column([
-            ft.Text(self.reference_help()), self.enroll_name,
-            self.choose_button, self.file_label,
-            ft.Text("Use an authorized historical recording. You do not need to speak or record a new sample.", size=13, color=MUTED),
-            self.enroll_source, self.enroll_basis, self.enroll_reference, self.enroll_confirm, self.enroll_grant, self.grant_button,
-            self.enroll_error,
-        ], tight=True, width=400, scroll=ft.ScrollMode.AUTO),
+        self.dialog = ft.AlertDialog(
+            modal=True, title=ft.Text("Add your voice"),
+            content=ft.Column([
+                ft.Text("01  ·  CHOOSE AUDIO", color=TEAL, size=12, weight=ft.FontWeight.BOLD),
+                ft.Text("An existing recording is all you need. No live speech required.",
+                        color=MUTED, size=13),
+                self.enroll_name,
+                self.choose_button, self.file_label,
+                ft.Text(self.reference_help(), color=MUTED, size=12),
+                ft.Divider(),
+                ft.Text("02  ·  RECORDING CONSENT", color=TEAL, size=12, weight=ft.FontWeight.BOLD),
+                self.enroll_source, self.enroll_basis, self.enroll_reference,
+                self.enroll_confirm,
+                ft.Text("Caregiver? Use an existing patient-issued authorization ID if available.",
+                        size=12, color=MUTED),
+                self.enroll_grant, self.grant_button,
+                self.enroll_error,
+            ], tight=True, width=400, scroll=ft.ScrollMode.AUTO, spacing=12),
             actions=[self.cancel_enroll_button, self.save_voice_button])
         self.page.open(self.dialog)
 
@@ -1628,14 +1638,38 @@ class AriaApp:
         self.account_result = ft.Text("", selectable=True, size=13)
         self.caregiver_permissions = [ft.Checkbox(label=name, value=False) for name in ("speak", "enroll", "manage")]
         self.caregiver_rows = ft.Column(spacing=4)
-        self.account_dialog = ft.AlertDialog(modal=True, title=ft.Text("Accessible local account"),
-            content=ft.Column([ft.Text("The device key protects this installation. A PIN adds a speech-free account lock. Caregiver login does not grant patient consent."),
-                self.account_id, self.account_pin, self.account_recovery,
-                ft.Row([ft.TextButton("Unlock", on_click=self.unlock_account), ft.TextButton("Set patient PIN", on_click=self.setup_account),
-                    ft.TextButton("Lock", on_click=self.lock_account), ft.TextButton("Recover", on_click=self.recover_account)], wrap=True),
-                ft.Divider(), ft.Text("Patient: create scoped caregiver access using the PIN above."),
-                ft.Row(self.caregiver_permissions, wrap=True), ft.TextButton("Add caregiver", on_click=self.add_caregiver_account),
-                self.caregiver_rows, self.account_result], tight=True, width=400, scroll=ft.ScrollMode.AUTO),
+        self.account_advanced = ft.Column([
+            ft.Divider(),
+            ft.Text("Recovery", weight=ft.FontWeight.BOLD, size=16),
+            ft.Text("Use your recovery code only when you need to reset access.", color=MUTED, size=12),
+            self.account_recovery,
+            ft.OutlinedButton("Recover account", icon=ft.Icons.KEY, on_click=self.recover_account),
+            ft.Divider(),
+            ft.Text("Caregiver access", weight=ft.FontWeight.BOLD, size=16),
+            ft.Text("A caregiver can only access the permissions you select. Consent is separate.",
+                    size=12, color=MUTED),
+            ft.Column(self.caregiver_permissions, spacing=0),
+            ft.OutlinedButton("Add caregiver", icon=ft.Icons.PERSON_ADD_OUTLINED,
+                              on_click=self.add_caregiver_account),
+            self.caregiver_rows,
+        ], spacing=12, visible=False)
+        self.account_dialog = ft.AlertDialog(
+            modal=True, title=ft.Text("Account & privacy"),
+            content=ft.Column([
+                ft.Text("Unlock privately with your PIN.", color=MUTED, size=13),
+                self.account_id, self.account_pin,
+                ft.Row([
+                    ft.FilledButton("Unlock", icon=ft.Icons.LOCK_OPEN_OUTLINED,
+                                    on_click=self.unlock_account),
+                    ft.OutlinedButton("Set PIN", on_click=self.setup_account),
+                ], wrap=True),
+                ft.TextButton("Lock account", icon=ft.Icons.LOCK_OUTLINE,
+                              on_click=self.lock_account),
+                ft.TextButton("Recovery & caregiver access", icon=ft.Icons.EXPAND_MORE,
+                              on_click=self.toggle_account_advanced),
+                self.account_advanced,
+                self.account_result,
+            ], tight=True, width=400, scroll=ft.ScrollMode.AUTO, spacing=10),
             actions=[ft.TextButton("Close", on_click=self.close_dialog)])
         self.dialog = self.account_dialog
         if (status.get("actor") or {}).get("role") == "patient":
@@ -1656,6 +1690,10 @@ class AriaApp:
             except AppError:
                 pass
         self.page.open(self.dialog)
+
+    async def toggle_account_advanced(self, event=None):
+        self.account_advanced.visible = not self.account_advanced.visible
+        self.update()
 
     async def account_action(self, action):
         if self.busy:
