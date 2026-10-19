@@ -83,6 +83,7 @@ def test_phrase_language_loading_and_stable_controls(monkeypatch):
     async def run():
         instance, page, backend = ui()
         await instance.refresh()
+        await instance.finish_onboarding()
         calls = []
         async def phrases(voice, speed, language="ur", emotion="neutral"):
             calls.append(language)
