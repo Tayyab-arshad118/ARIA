@@ -22,8 +22,15 @@ def test_welcome_connect_voice_and_speak_screens():
         assert instance.screen == "language_setup" and instance.language_setup_view.visible
         await instance.onboarding_language_continue()
         assert instance.screen == "security_setup" and instance.security_setup_view.visible
+        await instance.choose_helper_setup()
+        assert instance.setup_role == "helper" and instance.screen == "voices"
+        await instance.open_enrollment()
+        assert instance.enroll_basis.value == "authorized_representative"
+        assert instance.enroll_confirm.value is False
+        await instance.close_dialog()
+        instance.show_screen("security_setup")
         await instance.onboarding_security_continue()
-        assert instance.screen == "voices"
+        assert instance.setup_role == "patient" and instance.screen == "voices"
         await instance.open_connection()
         assert instance.screen == "connection"
         captured = []
