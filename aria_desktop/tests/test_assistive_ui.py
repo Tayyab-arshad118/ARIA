@@ -44,6 +44,21 @@ def test_builtin_entry_does_not_request_enrollment_and_emotion_is_forwarded(monk
     asyncio.run(run())
 
 
+
+def test_unconfigured_synthetic_voice_does_not_show_ready_screen():
+    async def run():
+        instance, page, backend = ui()
+        backend.available = [{"id": "aria_builtin", "name": "ARIA Default Voice",
+                              "kind": "builtin", "available": False,
+                              "needs_reenrollment": False}]
+        await instance.refresh()
+        instance.show_screen("voices")
+        await instance.use_aria_voice()
+        assert instance.screen == "voices"
+        assert "not configured" in instance.voice_note.value
+        await instance.shutdown()
+    asyncio.run(run())
+
 def test_account_token_is_memory_only_and_sent_to_local_backend():
     async def handler(request):
         if request.url.path.endswith("login"):
