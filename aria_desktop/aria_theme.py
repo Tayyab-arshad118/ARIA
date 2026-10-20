@@ -2,27 +2,28 @@
 import flet as ft
 
 BG, PANEL, INK = ft.Colors.SURFACE, ft.Colors.INVERSE_SURFACE, ft.Colors.ON_SURFACE
+BRAND_BLUE = "#2F6BFF"
 MUTED, ACCENT, ERROR = ft.Colors.ON_SURFACE_VARIANT, ft.Colors.PRIMARY, ft.Colors.ERROR
 SOFT, BORDER = ft.Colors.SECONDARY_CONTAINER, ft.Colors.OUTLINE_VARIANT
 
 
 def primary_style():
-    return ft.ButtonStyle(bgcolor={ft.ControlState.DEFAULT: INK, ft.ControlState.DISABLED: SOFT},
-        color={ft.ControlState.DEFAULT: BG, ft.ControlState.DISABLED: MUTED}, elevation=0,
+    return ft.ButtonStyle(bgcolor={ft.ControlState.DEFAULT: BRAND_BLUE, ft.ControlState.DISABLED: SOFT},
+        color={ft.ControlState.DEFAULT: "#FFFFFF", ft.ControlState.DISABLED: MUTED}, elevation=0,
         shape=ft.StadiumBorder(), animation_duration=180,
         text_style=ft.TextStyle(size=16, weight=ft.FontWeight.W_500))
 
 
 def app_theme(dark=False):
-    bg, panel, border, ink = ("#0E0E12", "#17171C", "#26262E", "#F2F2F5") if dark else ("#F7F7F9", "#FFFFFF", "#E6E6EC", "#111218")
-    muted, soft = ("#A6A8B5", "#222229") if dark else ("#5B5E6B", "#F2F3F7")
+    bg, panel, border, ink = ("#0E1220", "#171E2D", "#2B3446", "#F3F6FC") if dark else ("#F8FAFF", "#FFFFFF", "#E7ECF5", "#111827")
+    muted, soft = ("#AEB9CC", "#252F40") if dark else ("#687386", "#F2F5FB")
     shape = ft.RoundedRectangleBorder(radius=20)
     button = dict(bgcolor=ink, foreground_color=bg, elevation=0, shape=ft.StadiumBorder(),
         animation_duration=180, minimum_size=ft.Size(48, 54),
         text_style=ft.TextStyle(size=16, weight=ft.FontWeight.W_500), disabled_bgcolor=soft, disabled_foreground_color=muted)
-    return ft.Theme(use_material3=True, font_family="Segoe UI", hint_color="#9A9DAA",
+    return ft.Theme(use_material3=True, font_family="Segoe UI", hint_color="#94A0B3",
         scrollbar_theme=ft.ScrollbarTheme(thumb_visibility=False, track_visibility=False, thickness=0),
-        color_scheme=ft.ColorScheme(primary="#2F6BFF", on_primary="#FFFFFF", surface=bg,
+        color_scheme=ft.ColorScheme(primary=BRAND_BLUE, on_primary="#FFFFFF", surface=bg,
             on_surface=ink, inverse_surface=panel, on_inverse_surface=ink,
             on_surface_variant=muted, outline_variant=border, secondary_container=soft,
             on_secondary_container=ink, primary_container=soft, on_primary_container=ink,
@@ -35,7 +36,7 @@ def app_theme(dark=False):
             minimum_size=ft.Size(44, 44), text_style=ft.TextStyle(size=15, weight=ft.FontWeight.W_400)),
         text_button_theme=ft.TextButtonTheme(foreground_color=ink, shape=ft.StadiumBorder(),
             minimum_size=ft.Size(44, 44), text_style=ft.TextStyle(size=15, weight=ft.FontWeight.W_400)),
-        chip_theme=ft.ChipTheme(bgcolor=panel, selected_color=ink, elevation=0, click_elevation=0,
+        chip_theme=ft.ChipTheme(bgcolor=panel, selected_color=soft, elevation=0, click_elevation=0,
             border_side=ft.BorderSide(0.5, border), shape=ft.StadiumBorder(),
             label_text_style=ft.TextStyle(size=15, weight=ft.FontWeight.W_400)),
         divider_theme=ft.DividerTheme(color=border, thickness=0.5, space=16),

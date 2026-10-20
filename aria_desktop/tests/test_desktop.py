@@ -65,7 +65,9 @@ class Backend:
         return self.available
 
     async def health(self):
-        return {"ok": True, "colab": {"reachable": True}}
+        return {"ok": True, "colab": {"reachable": True},
+                "languages": {"default": "ur", "discovered": True,
+                              "items": [{"code": "ur", "name": "Urdu"}, {"code": "en", "name": "English"}]}}
 
     async def preview(self, text):
         self.previews.append(text)

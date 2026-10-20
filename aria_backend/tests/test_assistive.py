@@ -283,3 +283,13 @@ def test_synthesis_uses_conditioning_fingerprint_even_when_health_changed():
         finally:
             await gpu.close()
     asyncio.run(run())
+
+
+def test_phrase_text_remains_available_without_an_authorized_voice(protected):
+    client, app, gpu, mark = protected
+    voice = enroll_authorized(client)
+    assert client.post(f"/api/voices/{voice}/revoke").status_code == 204
+    bank = client.get("/api/phrases", params={"voice_id": ""})
+    assert bank.status_code == 200
+    assert bank.json()["voice_id"] is None
+    assert bank.json()["items"] and all(not item["cached"] for item in bank.json()["items"])

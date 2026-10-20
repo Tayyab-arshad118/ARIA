@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from test_desktop import ui, app
+from test_desktop import Page, ui, app
 
 
 def test_colab_output_labels_are_accepted():
@@ -19,6 +19,19 @@ def test_welcome_connect_voice_and_speak_screens():
         instance, page, backend = ui()
         assert instance.screen == "welcome" and not instance.compose_view.visible
         await instance.get_started()
+        assert instance.screen == "language_setup" and instance.language_setup_view.visible
+        await instance.onboarding_language_continue()
+        assert instance.screen == "security_setup" and instance.security_setup_view.visible
+        await instance.choose_helper_setup()
+        assert instance.setup_role == "helper" and instance.screen == "voices"
+        await instance.open_enrollment()
+        assert instance.enroll_basis.value == "authorized_representative"
+        assert instance.enroll_confirm.value is False
+        await instance.close_dialog()
+        instance.show_screen("security_setup")
+        await instance.onboarding_security_continue()
+        assert instance.setup_role == "patient" and instance.screen == "voices"
+        await instance.open_connection()
         assert instance.screen == "connection"
         captured = []
         async def connect(*args):
@@ -33,9 +46,49 @@ def test_welcome_connect_voice_and_speak_screens():
         assert instance.screen == "voices" and instance.voices_view.visible
         assert instance.colab_key_field.value == instance.groq_field.value == ""
         await instance.continue_speaking()
+        assert instance.screen == "ready" and instance.ready_view.visible
+        await instance.finish_onboarding()
         assert instance.screen == "compose" and not instance.voices_view.visible
+        assert instance.home_navigation.visible
+        await instance.open_speech_settings()
+        assert instance.screen == "speech_settings" and instance.speech_settings_view.visible
+        await instance.back_to_speaking()
+        assert instance.screen == "compose"
         await instance.open_connection()
         assert instance.screen == "connection" and not instance.compose_view.visible
+        await instance.shutdown()
+    asyncio.run(run())
+
+
+def test_finished_setup_opens_daily_speaking_screen(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "ui_state_path", lambda: tmp_path / "ui-state")
+    async def run():
+        first = app.AriaApp(Page(), app.AppSettings())
+        assert first.screen == "welcome"
+        await first.finish_onboarding()
+        await first.shutdown()
+        second = app.AriaApp(Page(), app.AppSettings())
+        assert second.screen == "compose" and not second.onboarding_active
+        assert second.home_navigation.visible
+        await second.shutdown()
+    asyncio.run(run())
+
+
+def test_language_choices_follow_the_connected_model():
+    async def run():
+        instance, page, backend = ui()
+        async def health():
+            return {"ok": True, "colab": {"reachable": True},
+                    "languages": {"default": "ur", "discovered": True,
+                                  "items": [{"code": "ur", "name": "Urdu"}]},
+                    "preview_languages": [{"code": "en", "name": "English"}]}
+        backend.health = health
+        await instance.refresh()
+        assert instance.language_pills.controls[0].disabled
+        assert not instance.language_pills.controls[1].disabled
+        assert [option.key for option in instance.language.options] == ["ur"]
+        await instance.onboarding_english()
+        assert instance.language.value == "ur"
         await instance.shutdown()
     asyncio.run(run())
 
@@ -70,6 +123,7 @@ def test_phrase_language_loading_and_stable_controls(monkeypatch):
     async def run():
         instance, page, backend = ui()
         await instance.refresh()
+        await instance.finish_onboarding()
         calls = []
         async def phrases(voice, speed, language="ur", emotion="neutral"):
             calls.append(language)
