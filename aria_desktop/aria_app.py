@@ -1398,7 +1398,7 @@ class AriaApp:
         self.selected_file = None
         self.dialog_kind = "enroll"
         self.enroll_name = ft.TextField(
-            label="Patient voice name", value="My voice", max_length=80, autofocus=True)
+            label="Patient voice name", hint_text="My voice", max_length=80, autofocus=True)
         self.file_label = ft.Text("No audio selected", color=MUTED, selectable=True)
         self.enroll_error = ft.Text("", color=RED)
         self.choose_button = ft.OutlinedButton("Choose audio", icon=ft.Icons.AUDIO_FILE, height=52, on_click=self.choose_file)
