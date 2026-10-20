@@ -2,7 +2,7 @@
 import flet as ft
 
 BG, PANEL, INK = ft.Colors.SURFACE, ft.Colors.INVERSE_SURFACE, ft.Colors.ON_SURFACE
-BRAND_BLUE = "#326AFF"
+BRAND_BLUE = "#2F6BFF"
 MUTED, ACCENT, ERROR = ft.Colors.ON_SURFACE_VARIANT, ft.Colors.PRIMARY, ft.Colors.ERROR
 SOFT, BORDER = ft.Colors.SECONDARY_CONTAINER, ft.Colors.OUTLINE_VARIANT
 
@@ -15,13 +15,13 @@ def primary_style():
 
 
 def app_theme(dark=False):
-    bg, panel, border, ink = ("#0D1220", "#171F30", "#2B3550", "#F5F8FF") if dark else ("#F6F8FD", "#FFFFFF", "#E7EAF2", "#12182A")
-    muted, soft = ("#ADB9D0", "#252E42") if dark else ("#657089", "#EEF2FA")
-    shape = ft.RoundedRectangleBorder(radius=24)
-    button = dict(bgcolor=BRAND_BLUE, foreground_color="#FFFFFF", elevation=0, shape=ft.StadiumBorder(),
+    bg, panel, border, ink = ("#0E1220", "#171E2D", "#2B3446", "#F3F6FC") if dark else ("#F8FAFF", "#FFFFFF", "#E7ECF5", "#111827")
+    muted, soft = ("#AEB9CC", "#252F40") if dark else ("#687386", "#F2F5FB")
+    shape = ft.RoundedRectangleBorder(radius=20)
+    button = dict(bgcolor=ink, foreground_color=bg, elevation=0, shape=ft.StadiumBorder(),
         animation_duration=180, minimum_size=ft.Size(48, 54),
         text_style=ft.TextStyle(size=16, weight=ft.FontWeight.W_500), disabled_bgcolor=soft, disabled_foreground_color=muted)
-    return ft.Theme(use_material3=True, font_family="Segoe UI", hint_color="#8792A5",
+    return ft.Theme(use_material3=True, font_family="Segoe UI", hint_color="#94A0B3",
         scrollbar_theme=ft.ScrollbarTheme(thumb_visibility=False, track_visibility=False, thickness=0),
         color_scheme=ft.ColorScheme(primary=BRAND_BLUE, on_primary="#FFFFFF", surface=bg,
             on_surface=ink, inverse_surface=panel, on_inverse_surface=ink,
@@ -36,7 +36,7 @@ def app_theme(dark=False):
             minimum_size=ft.Size(44, 44), text_style=ft.TextStyle(size=15, weight=ft.FontWeight.W_400)),
         text_button_theme=ft.TextButtonTheme(foreground_color=ink, shape=ft.StadiumBorder(),
             minimum_size=ft.Size(44, 44), text_style=ft.TextStyle(size=15, weight=ft.FontWeight.W_400)),
-        chip_theme=ft.ChipTheme(bgcolor=panel, selected_color=ink, elevation=0, click_elevation=0,
+        chip_theme=ft.ChipTheme(bgcolor=panel, selected_color=soft, elevation=0, click_elevation=0,
             border_side=ft.BorderSide(0.5, border), shape=ft.StadiumBorder(),
             label_text_style=ft.TextStyle(size=15, weight=ft.FontWeight.W_400)),
         divider_theme=ft.DividerTheme(color=border, thickness=0.5, space=16),
@@ -44,7 +44,7 @@ def app_theme(dark=False):
 
 
 def card(content, padding=20):
-    return ft.Container(content, padding=padding, bgcolor=PANEL, border_radius=24,
+    return ft.Container(content, padding=padding, bgcolor=PANEL, border_radius=20,
         border=ft.border.all(0.5, BORDER))
 
 
