@@ -1710,11 +1710,11 @@ class AriaApp:
                 values = {"actor_id": self.account_id.value or "patient", "pin": self.account_pin.value or ""}
             elif action == "recover":
                 values = {"recovery_code": self.account_recovery.value or "", "pin": self.account_pin.value or ""}
-             result = await self.client.account(action, **values)
+            result = await self.client.account(action, **values)
             self.account_pin.value = self.account_recovery.value = ""
             if result.get("recovery_code"):
                 self.account_result.value = "Save this recovery code privately; it is shown only now:\n" + result["recovery_code"]
-             else:
+            else:
                 self.account_result.value = "Account locked." if action == "logout" else "Account unlocked."
             await self.refresh()
         except AppError as error:
@@ -1735,7 +1735,7 @@ class AriaApp:
     async def recover_account(self, event=None):
         await self.account_action("recover")
 
-     async def save_settings(self, event=None):
+    async def save_settings(self, event=None):
         if self.busy:
             return
         try:
