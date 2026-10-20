@@ -56,6 +56,24 @@ def test_unconfigured_synthetic_voice_does_not_show_ready_screen():
         await instance.use_aria_voice()
         assert instance.screen == "voices"
         assert "not configured" in instance.voice_note.value
+        assert instance.voice_continue.disabled
+        await instance.continue_speaking()
+        assert instance.screen == "voices"
+        await instance.shutdown()
+    asyncio.run(run())
+
+
+def test_revoked_voice_cannot_complete_onboarding_or_load_as_selected():
+    async def run():
+        instance, page, backend = ui()
+        backend.available = [{"id": "revoked", "name": "Past voice", "available": True,
+                              "authorization_status": "revoked", "needs_reenrollment": False}]
+        await instance.refresh()
+        instance.voice.value = "revoked"
+        instance.update_controls()
+        assert instance.voice_continue.disabled and instance.speak_button.disabled
+        await instance.continue_speaking()
+        assert instance.screen == "welcome"
         await instance.shutdown()
     asyncio.run(run())
 
@@ -72,4 +90,28 @@ def test_account_token_is_memory_only_and_sent_to_local_backend():
         await client.account("logout")
         assert "x-aria-account" not in client.http.headers
         await client.close()
+    asyncio.run(run())
+
+
+def test_trusted_helper_ui_uses_scoped_backend_permissions():
+    async def run():
+        instance, page, backend = ui()
+        created = []
+        async def account(action="status", **values):
+            if action == "status":
+                return {"actor": {"id": "patient", "role": "patient"}, "pin_configured": True}
+            if action == "caregivers" and not values:
+                return []
+            created.append(values)
+            return {"actor_id": "caregiver_test"}
+        backend.account = account
+        await instance.open_account()
+        assert [item.label for item in instance.caregiver_permissions] == [
+            "Help with speaking", "Enroll the patient's voice", "Manage phrases and voices"]
+        instance.account_pin.value = "654321"
+        instance.caregiver_permissions[1].value = True
+        await instance.add_caregiver_account()
+        assert created == [{"pin": "654321", "permissions": ["enroll"]}]
+        assert "caregiver_test" in instance.account_result.value
+        await instance.shutdown()
     asyncio.run(run())

@@ -33,6 +33,12 @@ def brand(size):
         fit=ft.ImageFit.CONTAIN, semantics_label="ARIA logo")
 
 
+def ui_state_path():
+    base = Path(os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_STATE_HOME") or
+                str(Path.home() / ".local" / "state"))
+    return base / "ARIA" / "ui-state"
+
+
 def setup_heading(step, title, subtitle, icon):
     """A compact, consistent progress header for the speech-free setup flow."""
     controls = [
@@ -393,7 +399,7 @@ class BackendClient:
 
     async def phrases(self, voice_id, speed, language="ur", emotion="neutral"):
         data = await self.json_request("GET", "/api/phrases", "phrases",
-            params={"voice_id": voice_id or "default", "speed": speed, "language": language, "emotion": emotion})
+            params={"voice_id": voice_id or "", "speed": speed, "language": language, "emotion": emotion})
         if not isinstance(data, dict) or not isinstance(data.get("items"), list) or any(
             not isinstance(item, dict) or any(not isinstance(item.get(k), str) for k in ("id", "roman", "urdu", "category"))
             for item in data["items"]):
@@ -444,6 +450,7 @@ def insert_suggestion(text, word):
 class AriaApp:
     def __init__(self, page, settings, client=None):
         self.page, self.settings = page, settings
+        self.state_file = ui_state_path() if client is None else None
         self.client = client or BackendClient(settings)
         self.busy = False
         self.closed = False
@@ -472,12 +479,18 @@ class AriaApp:
         self.workflow_mode = "assistive"
         self.access_state = {"actor": None, "pin_configured": False}
         self.language_names = {"en": "English", "ur": "Urdu"}
+        self.speech_languages = {"ur"}
         self.api_translit_enabled = False
         self.server_ready = False
         self.backend_ready = False
         self.status_error = False
         self.screen = "welcome"
         self.onboarding_active = True
+        if self.state_file is not None:
+            try:
+                self.onboarding_active = self.state_file.read_text(encoding="utf-8") != "complete"
+            except OSError:
+                pass
         self.setup_role = "patient"  # A helper assists with the same patient voice, not a separate profile.
         self.reference_limits = {"max_source_seconds": 1800, "max_upload_bytes": self.settings.max_upload_bytes, "window_seconds": 30}
         self.build()
@@ -662,20 +675,21 @@ class AriaApp:
                             expand=True, on_click=self.onboarding_language_continue)]),
         ], spacing=18, visible=False, expand=True)
         self.security_setup_view = ft.Column([
-<<<<<<< HEAD
-            setup_heading(2, "Create local access", "Protect your voice with a PIN. Speaking is never required to sign in.", ft.Icons.LOCK_OUTLINE),
+            setup_heading(2, "Set up your voice", "One person's voice. Set it up yourself or with trusted help.", ft.Icons.LOCK_OUTLINE),
             card(ft.Column([
-                ft.ListTile(leading=ft.Icon(ft.Icons.PIN_OUTLINED, color=TEAL),
-                            title=ft.Text("Patient PIN"),
-                            subtitle=ft.Text("Set a PIN and save your recovery code"), on_click=self.open_account),
+                ft.ListTile(leading=ft.Icon(ft.Icons.PERSON_OUTLINE, color=TEAL),
+                            title=ft.Text("I'm setting up my voice"),
+                            subtitle=ft.Text("Use your own authorized recording"),
+                            trailing=ft.Icon(ft.Icons.CHEVRON_RIGHT, color=MUTED), on_click=self.choose_patient_setup),
                 ft.Divider(height=1, color=BORDER),
                 ft.ListTile(leading=ft.Icon(ft.Icons.PEOPLE_OUTLINE, color=TEAL),
-                            title=ft.Text("Caregiver access"),
-                            subtitle=ft.Text("Grant only the permissions you choose"), on_click=self.open_account),
+                            title=ft.Text("I'm helping someone"),
+                            subtitle=ft.Text("Enroll the patient's voice with permission"),
+                            trailing=ft.Icon(ft.Icons.CHEVRON_RIGHT, color=MUTED), on_click=self.choose_helper_setup),
             ], spacing=4), padding=10),
-            ft.OutlinedButton("Set up my PIN", icon=ft.Icons.LOCK_OPEN_OUTLINED,
+            ft.OutlinedButton("Set an optional PIN", icon=ft.Icons.LOCK_OPEN_OUTLINED,
                 height=50, on_click=self.open_account),
-            ft.Text("You can do this later. Recording consent is asked separately before voice enrollment.",
+            ft.Text("Helping does not transfer ownership or establish consent. Authorization is checked before enrollment.",
                     color=MUTED, size=12),
             ft.Container(expand=True),
             ft.Row([ft.FilledButton("Choose a voice", icon=ft.Icons.ARROW_FORWARD, height=54,
@@ -684,46 +698,10 @@ class AriaApp:
         self.use_aria_button = ft.FilledButton("Use ARIA Voice", icon=ft.Icons.GRAPHIC_EQ_ROUNDED,
             height=50, on_click=self.use_aria_voice)
         self.builtin_note = ft.Text("Needs a licensed synthetic reference and a connected model.", size=12, color=MUTED)
+        self.voice_setup_hint = ft.Text("Use your own authorized recording. No live speech required.", color=MUTED, size=12)
         self.voices_view = ft.Column([
             setup_heading(3, "Choose your voice", "Choose ARIA Voice or use an authorized recording.", None),
-=======
-            ft.Text("02 / 03  ·  GETTING STARTED", color=TEAL, size=12,
-                    weight=ft.FontWeight.BOLD),
-            ft.Container(height=15),
-            ft.Icon(ft.Icons.FAVORITE_BORDER, size=44, color=TEAL),
-            ft.Text("Who is setting up the voice?", size=27,
-                    weight=ft.FontWeight.BOLD, color=INK),
-            ft.Text("One patient voice. You can set it up yourself or with help.",
-                    color=MUTED, size=14),
-            card(ft.Column([
-                ft.ListTile(
-                    leading=ft.Icon(ft.Icons.PERSON_OUTLINE, color=TEAL),
-                    title=ft.Text("I'm setting up my voice", weight=ft.FontWeight.W_500),
-                    subtitle=ft.Text("Use a recording of your own voice."),
-                    trailing=ft.Icon(ft.Icons.CHEVRON_RIGHT, color=TEAL),
-                    on_click=self.choose_patient_setup),
-                ft.Divider(height=5),
-                ft.ListTile(
-                    leading=ft.Icon(ft.Icons.VOLUNTEER_ACTIVISM_OUTLINED, color=TEAL),
-                    title=ft.Text("I'm helping someone", weight=ft.FontWeight.W_500),
-                    subtitle=ft.Text("Use an authorized recording of the patient's voice."),
-                    trailing=ft.Icon(ft.Icons.CHEVRON_RIGHT, color=TEAL),
-                    on_click=self.choose_helper_setup),
-            ], spacing=4), padding=10),
-            ft.Text("Both choices lead to the same patient voice. Assisting does "
-                    "not grant ownership or consent.", color=MUTED, size=12),
-            ft.Container(height=12),
-            ft.TextButton("Set an optional PIN", icon=ft.Icons.LOCK_OUTLINE,
-                          on_click=self.open_account),
-        ], spacing=15, visible=False)
-        self.voice_setup_hint = ft.Text("Add a clear recording of your own voice.", color=MUTED, size=13)
-        self.use_aria_button = ft.FilledButton("Use ARIA Voice", icon=ft.Icons.RECORD_VOICE_OVER, height=52, on_click=self.use_aria_voice)
-        self.builtin_note = ft.Text("Requires a configured licensed synthetic reference and connected model.", size=12, color=MUTED)
-        self.voices_view = ft.Column([
-            ft.Text("03 / 03  ·  VOICE SETUP", color=TEAL, size=12, weight=ft.FontWeight.BOLD),
-            ft.Text("Your personal voice", size=28, weight=ft.FontWeight.BOLD, color=INK),
             self.voice_setup_hint,
->>>>>>> 8ea6076a9be284851e1248df28cefdfea721eb14
             card(ft.Column([
                 ft.Row([ft.Container(ft.Icon(ft.Icons.GRAPHIC_EQ_ROUNDED, color=TEAL, size=23),
                     width=44, height=44, bgcolor=TINT, border_radius=14, alignment=ft.alignment.center),
@@ -733,19 +711,12 @@ class AriaApp:
                 self.builtin_note,
             ], spacing=7), padding=14),
             card(ft.Column([
-<<<<<<< HEAD
                 ft.Row([ft.Container(ft.Icon(ft.Icons.PERSON_OUTLINE, color=TEAL, size=23),
                     width=44, height=44, bgcolor=TINT, border_radius=14, alignment=ft.alignment.center),
                     ft.Text("Clone My Voice", weight=ft.FontWeight.W_500, size=17, expand=True),
                     ft.IconButton(ft.Icons.ADD, tooltip="Add a voice", icon_color=TEAL,
                         on_click=self.open_enrollment)], spacing=8),
                 ft.Text("Use an authorized past recording or choose a saved voice.", color=MUTED, size=13),
-=======
-                ft.Row([ft.Icon(ft.Icons.RECORD_VOICE_OVER, color=TEAL),
-                        ft.Text("Patient's voice", weight=ft.FontWeight.BOLD, size=17)]),
-                ft.Text("Use an existing recording. No live speech is required.",
-                        color=MUTED, size=13),
->>>>>>> 8ea6076a9be284851e1248df28cefdfea721eb14
                 voice_card,
             ], spacing=7), padding=14),
             ft.TextButton("Connect voice server", icon=ft.Icons.LINK, on_click=self.open_connection),
@@ -873,7 +844,6 @@ class AriaApp:
             ("Voices", ft.Icons.RECORD_VOICE_OVER, self.show_voices),
             ("Profile", ft.Icons.PERSON_OUTLINE, self.open_profile),
         ]
-<<<<<<< HEAD
         self.nav_visuals = {}
         nav_buttons = []
         for label, icon, action in nav_items:
@@ -889,18 +859,6 @@ class AriaApp:
         self.home_navigation = ft.Container(ft.Row(nav_buttons, spacing=2),
             padding=ft.padding.symmetric(horizontal=6, vertical=4),
             bgcolor=PANEL, border_radius=18, visible=False,
-=======
-        self.nav_buttons = {
-            label: ft.TextButton(label, icon=icon, on_click=action,
-                                 style=ft.ButtonStyle(color=MUTED))
-            for label, icon, action in nav_items
-        }
-        self.home_navigation = ft.Container(ft.Row([
-            self.nav_buttons[label] for label, _icon, _action in nav_items
-        ], alignment=ft.MainAxisAlignment.SPACE_AROUND, spacing=0, wrap=True),
-            padding=ft.padding.symmetric(horizontal=4, vertical=6),
-            bgcolor=PANEL, border_radius=22, visible=False,
->>>>>>> 8ea6076a9be284851e1248df28cefdfea721eb14
             border=ft.border.all(0.5, BORDER))
         self.language_pills = ft.Row(spacing=8, wrap=True)
         self.language_bar = ft.Column([ft.Text("Speak in", size=12, color=MUTED), self.language_pills], spacing=8, visible=False)
@@ -922,7 +880,7 @@ class AriaApp:
         page.add(ft.Container(expand=True, alignment=ft.alignment.top_center,
             content=ft.Container(width=420, content=self.shell)))
         self.render_language_pills()
-        self.show_screen("welcome")
+        self.show_screen("welcome" if self.onboarding_active else "compose")
         page.on_disconnect = self.shutdown
         page.on_close = self.shutdown
         page.on_connect = self.reconnect
@@ -982,18 +940,7 @@ class AriaApp:
             if key == name:
                 self.screen_switcher.content = view
         self.header.visible = self.connection.visible = name not in {"welcome", "language_setup", "security_setup", "ready"}
-<<<<<<< HEAD
         self.home_navigation.visible = name in {"compose", "library", "voices", "speech_settings", "profile", "emotion"} and not self.onboarding_active
-=======
-        self.home_navigation.visible = name in {"compose", "library", "voices", "speech_settings"} and not self.onboarding_active
-        active_tab = {"compose": "Speak", "library": "Phrases",
-                      "voices": "Voices", "speech_settings": "Settings"}.get(name)
-        for label, button in self.nav_buttons.items():
-            button.style = ft.ButtonStyle(
-                color=TEAL if label == active_tab else MUTED,
-                bgcolor=SOFT if label == active_tab else ft.Colors.TRANSPARENT,
-                shape=ft.StadiumBorder())
->>>>>>> 8ea6076a9be284851e1248df28cefdfea721eb14
         self.language_bar.visible = name in {"compose", "library"}
         self.speech_actions.visible = name == "compose"
         self.voice_actions.visible = name == "voices"
@@ -1040,6 +987,12 @@ class AriaApp:
 
     async def finish_onboarding(self, event=None):
         self.onboarding_active = False
+        if self.state_file is not None:
+            try:
+                self.state_file.parent.mkdir(parents=True, exist_ok=True)
+                self.state_file.write_text("complete", encoding="utf-8")
+            except OSError:
+                pass  # Setup remains usable if this device disallows local UI preferences.
         self.show_screen("compose")
 
     async def back_to_speaking(self, event=None):
@@ -1074,11 +1027,11 @@ class AriaApp:
             return
         self.voice.value = "aria_builtin"
         profile = self.selected_voice()
-        if not profile or not profile.get("available", False):
+        if not self.voice_usable(profile):
             self.voice_note.value = ("ARIA Default Voice is not configured yet. "
                                      "Connect a licensed synthetic reference or enroll the patient's recording.")
             self.voice_note.visible = True
-            self.update()
+            self.update_controls()
             return
         self.navigation.selected_index = 0
         self.show_screen("ready" if self.onboarding_active else "compose")
@@ -1107,7 +1060,7 @@ class AriaApp:
         if self.busy:
             return
         voice = self.selected_voice()
-        if not voice or voice.get("needs_reenrollment"):
+        if not self.voice_usable(voice):
             self.voice_note.value = "Add a recording or select a compatible voice to continue."
             self.update()
             return
@@ -1203,15 +1156,18 @@ class AriaApp:
                 self.language.value = value
                 await self.language_changed()
             active = self.language.value == code
-            controls.append(ft.OutlinedButton(self.language_names.get(code, code), on_click=select, height=44,
+            controls.append(ft.OutlinedButton(self.language_names.get(code, code), on_click=select,
+                disabled=code not in self.speech_languages, height=44,
+                tooltip=None if code in self.speech_languages else "Connect a model that supports this language",
                 style=ft.ButtonStyle(bgcolor=INK if active else PANEL, color=BG if active else INK,
                     padding=ft.padding.symmetric(horizontal=18), side=ft.BorderSide(0.5, BORDER),
                     text_style=ft.TextStyle(size=15, weight=ft.FontWeight.W_500 if active else ft.FontWeight.W_400),
                     shape=ft.StadiumBorder(), animation_duration=180)))
         items = []
-        for code, name in self.language_names.items():
+        for code in sorted(self.speech_languages):
             if code in {"en", "ur"}:
                 continue
+            name = self.language_names.get(code, code.upper())
             async def choose(event, value=code):
                 self.language.value = value
                 await self.language_changed()
@@ -1229,6 +1185,11 @@ class AriaApp:
     def selected_voice(self):
         return next((v for v in self.voices if v["id"] == self.voice.value), None)
 
+    def voice_usable(self, voice):
+        return bool(voice and voice.get("available", True) and not voice.get("needs_reenrollment")
+            and not (self.workflow_mode == "assistive" and voice.get("authorization_status") in
+                     {"review_required", "revoked"}))
+
     def update_controls(self):
         self.start_button.disabled = self.busy
         self.welcome_status.value = "Checking your connection…" if self.busy else "Made for your everyday conversations."
@@ -1236,9 +1197,7 @@ class AriaApp:
         self.native_count.value = f"{len(self.preview.value or '')} / {self.settings.max_text_chars}"
         self.mode_pill.disabled = self.language_pills.disabled = self.busy
         selected = self.selected_voice()
-        valid_voice = selected is not None and not selected.get("needs_reenrollment", False) and selected.get("available", True)
-        if selected and self.workflow_mode == "assistive" and selected.get("authorization_status") in {"review_required", "revoked"}:
-            valid_voice = False
+        valid_voice = self.voice_usable(selected)
         authorized = self.workflow_mode != "research" or self.security_mode != "strict" or self.voice.value == "aria_builtin" or self.client.session_valid(self.voice.value)
         speech_text = self.preview.value if self.native_override else self.input.value
         self.speak_button.disabled = self.busy or not (speech_text or "").strip() or not valid_voice or not authorized
@@ -1250,7 +1209,7 @@ class AriaApp:
                                  else "Voice verification is optional." if self.security_mode == "basic" else "")
         self.safety_note.visible = bool(self.safety_note.value)
         self.safety_actions.visible = self.verify_button.visible or self.emotion_button.visible
-        self.voice_continue.disabled = self.busy
+        self.voice_continue.disabled = self.busy or not valid_voice
         for control in (self.voice, self.enroll_button, self.refresh_button, self.settings_button, self.speed, self.mode, self.language, self.expression, self.phrase_expression, self.account_button, self.use_aria_button):
             control.disabled = self.busy
         self.progress.visible = self.busy
@@ -1417,7 +1376,7 @@ class AriaApp:
             self.voices = await self.client.voices()
             self.voice.options = [ft.dropdown.Option(v["id"], v["name"] +
                 (" · needs re-enrollment" if v.get("needs_reenrollment") else "")) for v in self.voices]
-            compatible = [v["id"] for v in self.voices if not v.get("needs_reenrollment") and v.get("available", True)]
+            compatible = [v["id"] for v in self.voices if self.voice_usable(v)]
             previous = preferred or self.voice.value
             self.voice.value = previous if previous in compatible else (compatible[0] if compatible else None)
             health = await self.client.health()
@@ -1440,8 +1399,10 @@ class AriaApp:
             if catalog.get("items"):
                 self.language_names = {"en": "English", "ur": "Urdu", **{item["code"]: item["name"]
                     for item in health.get("preview_languages", [])}, **{item["code"]: item["name"] for item in catalog["items"]}}
-                self.language.options = [ft.dropdown.Option(code, name) for code, name in self.language_names.items()]
-                if self.language.value not in self.language_names:
+                self.speech_languages = {item["code"] for item in catalog["items"]}
+                self.language.options = [ft.dropdown.Option(item["code"], item["name"])
+                    for item in sorted(catalog["items"], key=lambda item: item["name"].casefold())]
+                if self.language.value not in self.speech_languages:
                     self.language.value = catalog.get("default", "ur")
                 self.language_note.visible = not catalog.get("discovered", False)
             self.reference_limits = health.get("reference_limits", self.reference_limits)
@@ -1485,7 +1446,7 @@ class AriaApp:
         selected = self.selected_voice()
         text = ((self.preview.value if self.native_override else self.input.value) or "").strip()
         speech_mode = "native" if self.native_override else self.mode.value
-        if not text or not selected or selected.get("needs_reenrollment"):
+        if not text or not self.voice_usable(selected):
             self.say_status("Enter a message and choose an enrolled voice.", error=True)
             return
         self.cancel_preview()
@@ -1840,6 +1801,10 @@ class AriaApp:
         self.account_pin = ft.TextField(label="PIN (6–12 digits)", password=True, can_reveal_password=True)
         self.account_recovery = ft.TextField(label="Recovery code (recovery only)", password=True, can_reveal_password=True)
         self.account_result = ft.Text("", selectable=True, size=13)
+        self.caregiver_permissions = [ft.Checkbox(label=label, data=scope, value=False)
+            for scope, label in (("speak", "Help with speaking"),
+                                 ("enroll", "Enroll the patient's voice"),
+                                 ("manage", "Manage phrases and voices"))]
         self.caregiver_rows = ft.Column(spacing=4)
         self.account_advanced = ft.Column([
             ft.Divider(),
@@ -1849,6 +1814,14 @@ class AriaApp:
             ft.OutlinedButton("Recover account", icon=ft.Icons.KEY, on_click=self.recover_account),
             ft.Text("A helper can assist with voice enrollment without creating a second "
                     "voice or receiving full account access.", size=12, color=MUTED),
+            ft.Divider(height=1, color=BORDER),
+            ft.Text("Trusted helpers", weight=ft.FontWeight.W_500, size=16),
+            ft.Text("Only the patient account may grant or revoke these permissions.",
+                size=12, color=MUTED),
+            ft.Column(self.caregiver_permissions, spacing=0),
+            ft.OutlinedButton("Add trusted helper", icon=ft.Icons.PERSON_ADD_OUTLINED,
+                on_click=self.add_caregiver_account),
+            self.caregiver_rows,
         ], spacing=12, visible=False)
         self.account_dialog = ft.AlertDialog(
             modal=True, title=ft.Text("Account & privacy"),
@@ -1869,7 +1842,32 @@ class AriaApp:
             ], tight=True, width=400, scroll=ft.ScrollMode.AUTO, spacing=10),
             actions=[ft.TextButton("Close", on_click=self.close_dialog)])
         self.dialog = self.account_dialog
+        if (status.get("actor") or {}).get("role") == "patient":
+            await self.refresh_caregivers()
         self.page.open(self.dialog)
+
+    async def refresh_caregivers(self):
+        try:
+            accounts = await self.client.account("caregivers")
+        except AppError:
+            self.caregiver_rows.controls = []
+            return
+        rows = []
+        for entry in accounts:
+            if not entry.get("active"):
+                continue
+            async def revoke(event, identifier=entry["id"]):
+                try:
+                    await self.client.revoke_caregiver(identifier)
+                    self.account_result.value = "Trusted helper access revoked."
+                    await self.refresh_caregivers()
+                except AppError as error:
+                    self.account_result.value = str(error)
+                self.update()
+            rows.append(ft.ListTile(title=ft.Text(entry["id"], size=13),
+                subtitle=ft.Text(", ".join(entry.get("permissions", [])), size=11, color=MUTED),
+                trailing=ft.TextButton("Revoke", on_click=revoke)))
+        self.caregiver_rows.controls = rows
 
     async def toggle_account_advanced(self, event=None):
         self.account_advanced.visible = not self.account_advanced.visible
@@ -1886,10 +1884,16 @@ class AriaApp:
                 values = {"actor_id": self.account_id.value or "patient", "pin": self.account_pin.value or ""}
             elif action == "recover":
                 values = {"recovery_code": self.account_recovery.value or "", "pin": self.account_pin.value or ""}
+            elif action == "caregivers":
+                values = {"pin": self.account_pin.value or "",
+                    "permissions": [c.data for c in self.caregiver_permissions if c.value]}
             result = await self.client.account(action, **values)
             self.account_pin.value = self.account_recovery.value = ""
             if result.get("recovery_code"):
                 self.account_result.value = "Save this recovery code privately; it is shown only now:\n" + result["recovery_code"]
+            elif action == "caregivers":
+                self.account_result.value = "Save this helper ID privately: " + result["actor_id"]
+                await self.refresh_caregivers()
             else:
                 self.account_result.value = "Account locked." if action == "logout" else "Account unlocked."
             await self.refresh()
@@ -1910,6 +1914,9 @@ class AriaApp:
 
     async def recover_account(self, event=None):
         await self.account_action("recover")
+
+    async def add_caregiver_account(self, event=None):
+        await self.account_action("caregivers")
 
     async def save_settings(self, event=None):
         if self.busy:
@@ -1992,7 +1999,7 @@ class AriaApp:
         revision = self.phrase_revision
         language = self.language.value
         selected = self.selected_voice()
-        voice_id = self.voice.value if selected and not selected.get("needs_reenrollment") else None
+        voice_id = self.voice.value if self.voice_usable(selected) else None
         try:
             if warm and voice_id and language == "ur":
                 await self.client.warm_phrases(voice_id)

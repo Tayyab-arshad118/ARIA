@@ -17,9 +17,9 @@ ARIA is a personal assistive communication app for **one intended voice user**. 
 - **Speak:** text in Urdu/native or Roman mode, suggestion and speech controls.
 - **Phrases:** searchable and reusable phrases.
 - **Voice:** select/replace the patient's authorized recording and manage the patient profile.
-- **Settings:** expression, speed, account PIN, recovery, connection, safety and technical diagnostics.
+- **Profile:** account PIN, recovery, trusted helper access, connection and privacy; speech settings contain expression, speed and research-only safety controls.
 
-The user should not see a generic caregiver permission dashboard with unrelated **speak / enroll / manage** toggles. Backend scope enforcement remains intact and must not be bypassed.
+Helper permissions use plain-language labels in the app and map to the backend's scoped **speak / enroll / manage** permissions. Backend scope enforcement remains intact and must not be bypassed.
 
 ## Visual standards
 - ARIA blue primary CTA, high-contrast dark text, white/soft-grey backgrounds and rounded low-chrome cards.

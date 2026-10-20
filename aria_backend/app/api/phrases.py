@@ -64,7 +64,9 @@ async def list_phrases(request: Request, voice_id: str = Query("default", max_le
     async with state.data_lock:
         state.access.actor(request, "speak")
         try:
-            if voice_id == "aria_builtin":
+            if not voice_id:
+                resolved = None
+            elif voice_id == "aria_builtin":
                 resolved = voice_id
             else:
                 resolved, _ = state.voices.get(voice_id)

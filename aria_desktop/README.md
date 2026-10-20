@@ -30,13 +30,14 @@ The app defaults to local port 8001. Settings come from explicit `ARIA_APP_ENV_F
 
 The governing purpose is speech-free assistive communication. See the [implementation and evaluation guide](../README.md#chapter-20--fyp-implementation-migration-and-evaluation). Normal access uses the device key and optional PIN, never a spoken challenge. Expression and protected output are implemented; model quality and accessibility still need real-user evaluation.
 
-- **Welcome:** supplied logo, one tagline, and Get started.
+- **Welcome:** supplied logo, one tagline, and Get started on the first setup; later launches open Speak.
 - **Connect:** Colab key and URL, optional Groq key, checked connection, and quieter Advanced/offline actions.
-- **Your voice:** saved voice selection, historical-recording registration, speed, authorized emotion references and manual expression, research-only spoken checks, and a fixed Continue button.
+- **Your voice:** patient/helper setup, saved voice selection, historical-recording registration, authorized emotion references, research-only spoken checks, and a fixed Continue button.
 - **Compose:** language selection, independent Roman/native text fields, suggestions, playback controls, and connection/error status.
-- **Phrases:** translated cards, language selection, search/filter, favorites, recents, editing, and playback.
+- **Phrases:** translated cards, language selection, search/filter, favorites, recents, editing, and playback. Phrase text remains visible without an authorized voice.
+- **Profile:** PIN/recovery, trusted helper permissions, voice data, and connection access.
 
-The header logo is not repeated in the voice card. The default desktop window is 460 × 780, centered content is constrained, and shorter viewports reduce spacing/text-area minimums. Long content remains scrollable without visible scrollbars. Font sizing, contrast, and the separate source/native text flows are preserved across light/dark appearances.
+The header logo is not repeated in the voice card. The default desktop window is 440 × 820, centered content is constrained, and shorter viewports reduce spacing/text-area minimums. Long content remains scrollable without visible scrollbars. Font sizing, contrast, and the separate source/native text flows are preserved across light/dark appearances. A private local marker records only that setup was completed; it contains no key or voice data.
 
 ## State and event behavior
 

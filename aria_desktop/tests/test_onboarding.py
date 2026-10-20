@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from test_desktop import ui, app
+from test_desktop import Page, ui, app
 
 
 def test_colab_output_labels_are_accepted():
@@ -56,6 +56,39 @@ def test_welcome_connect_voice_and_speak_screens():
         assert instance.screen == "compose"
         await instance.open_connection()
         assert instance.screen == "connection" and not instance.compose_view.visible
+        await instance.shutdown()
+    asyncio.run(run())
+
+
+def test_finished_setup_opens_daily_speaking_screen(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "ui_state_path", lambda: tmp_path / "ui-state")
+    async def run():
+        first = app.AriaApp(Page(), app.AppSettings())
+        assert first.screen == "welcome"
+        await first.finish_onboarding()
+        await first.shutdown()
+        second = app.AriaApp(Page(), app.AppSettings())
+        assert second.screen == "compose" and not second.onboarding_active
+        assert second.home_navigation.visible
+        await second.shutdown()
+    asyncio.run(run())
+
+
+def test_language_choices_follow_the_connected_model():
+    async def run():
+        instance, page, backend = ui()
+        async def health():
+            return {"ok": True, "colab": {"reachable": True},
+                    "languages": {"default": "ur", "discovered": True,
+                                  "items": [{"code": "ur", "name": "Urdu"}]},
+                    "preview_languages": [{"code": "en", "name": "English"}]}
+        backend.health = health
+        await instance.refresh()
+        assert instance.language_pills.controls[0].disabled
+        assert not instance.language_pills.controls[1].disabled
+        assert [option.key for option in instance.language.options] == ["ur"]
+        await instance.onboarding_english()
+        assert instance.language.value == "ur"
         await instance.shutdown()
     asyncio.run(run())
 

@@ -10,9 +10,12 @@ The main README is the single complete handbook. This folder contains supporting
 
 | Screen | Example |
 | --- | --- |
-| Welcome | [onboarding-welcome.png](screenshots/onboarding-welcome.png) |
+| Welcome | [ui-redesign-welcome.png](screenshots/ui-redesign-welcome.png) |
+| Language setup | [ui-redesign-language.png](screenshots/ui-redesign-language.png) |
 | Connection | [onboarding-connect.png](screenshots/onboarding-connect.png) |
-| Compact voice selection | [onboarding-voices-360x640.png](screenshots/onboarding-voices-360x640.png) |
+| Compact voice selection | [ui-redesign-voices-360x640.png](screenshots/ui-redesign-voices-360x640.png) |
+| Speak | [ui-redesign-speak.png](screenshots/ui-redesign-speak.png) |
+| Profile | [ui-redesign-profile.png](screenshots/ui-redesign-profile.png) |
 | English, light | [speak-english-light.png](screenshots/speak-english-light.png) |
 | English, dark | [speak-english-dark.png](screenshots/speak-english-dark.png) |
 | Quick phrases | [quick-phrases-phone.png](screenshots/quick-phrases-phone.png) |
