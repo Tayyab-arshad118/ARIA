@@ -671,13 +671,13 @@ class AriaApp:
             ft.TextButton("Set an optional PIN", icon=ft.Icons.LOCK_OUTLINE,
                           on_click=self.open_account),
         ], spacing=15, visible=False)
+        self.voice_setup_hint = ft.Text("Add a clear recording of your own voice.", color=MUTED, size=13)
         self.use_aria_button = ft.FilledButton("Use ARIA Voice", icon=ft.Icons.RECORD_VOICE_OVER, height=52, on_click=self.use_aria_voice)
         self.builtin_note = ft.Text("Requires a configured licensed synthetic reference and connected model.", size=12, color=MUTED)
         self.voices_view = ft.Column([
             ft.Text("03 / 03  ·  VOICE SETUP", color=TEAL, size=12, weight=ft.FontWeight.BOLD),
             ft.Text("Your personal voice", size=28, weight=ft.FontWeight.BOLD, color=INK),
-            ft.Text("Enroll one patient's voice from an authorized recording. "
-                    "A synthetic ARIA voice is an optional fallback.", size=14, color=MUTED),
+            self.voice_setup_hint,
             card(ft.Column([
                 ft.Row([ft.Icon(ft.Icons.AUTO_AWESOME, color=TEAL),
                         ft.Text("ARIA Default Voice", weight=ft.FontWeight.BOLD, size=17)]),
@@ -763,10 +763,13 @@ class AriaApp:
             ("Voices", ft.Icons.RECORD_VOICE_OVER, self.show_voices),
             ("Settings", ft.Icons.TUNE, self.open_speech_settings),
         ]
-        self.home_navigation = ft.Container(ft.Row([
-            ft.TextButton(label, icon=icon, on_click=action,
-                          style=ft.ButtonStyle(color=TEAL if label == "Speak" else MUTED))
+        self.nav_buttons = {
+            label: ft.TextButton(label, icon=icon, on_click=action,
+                                 style=ft.ButtonStyle(color=MUTED))
             for label, icon, action in nav_items
+        }
+        self.home_navigation = ft.Container(ft.Row([
+            self.nav_buttons[label] for label, _icon, _action in nav_items
         ], alignment=ft.MainAxisAlignment.SPACE_AROUND, spacing=0, wrap=True),
             padding=ft.padding.symmetric(horizontal=4, vertical=6),
             bgcolor=PANEL, border_radius=22, visible=False,
@@ -839,6 +842,13 @@ class AriaApp:
                 self.screen_switcher.content = view
         self.header.visible = self.connection.visible = name not in {"welcome", "language_setup", "security_setup", "ready"}
         self.home_navigation.visible = name in {"compose", "library", "voices", "speech_settings"} and not self.onboarding_active
+        active_tab = {"compose": "Speak", "library": "Phrases",
+                      "voices": "Voices", "speech_settings": "Settings"}.get(name)
+        for label, button in self.nav_buttons.items():
+            button.style = ft.ButtonStyle(
+                color=TEAL if label == active_tab else MUTED,
+                bgcolor=SOFT if label == active_tab else ft.Colors.TRANSPARENT,
+                shape=ft.StadiumBorder())
         self.language_bar.visible = name in {"compose", "library"}
         self.speech_actions.visible = name == "compose"
         self.voice_actions.visible = name == "voices"
@@ -873,10 +883,13 @@ class AriaApp:
 
     async def choose_patient_setup(self, event=None):
         self.setup_role = "patient"
+        self.voice_setup_hint.value = "Use your own authorized recording. No live speech required."
         self.show_screen("voices")
 
     async def choose_helper_setup(self, event=None):
         self.setup_role = "helper"
+        self.voice_setup_hint.value = ("Use a recording of the patient, not the person assisting. "
+                                       "Valid patient or representative authorization is still required.")
         self.show_screen("voices")
 
     async def finish_onboarding(self, event=None):
@@ -903,12 +916,16 @@ class AriaApp:
         if self.busy:
             return
         self.voice.value = "aria_builtin"
+        profile = self.selected_voice()
+        if not profile or not profile.get("available", False):
+            self.voice_note.value = ("ARIA Default Voice is not configured yet. "
+                                     "Connect a licensed synthetic reference or enroll the patient's recording.")
+            self.voice_note.visible = True
+            self.update()
+            return
         self.navigation.selected_index = 0
         self.show_screen("ready" if self.onboarding_active else "compose")
         self.update_controls()
-        profile = self.selected_voice()
-        if not profile or not profile.get("available", False):
-            self.say_status("ARIA Default Voice needs a licensed synthetic reference configured on the backend. No personal recording is required.", error=True)
 
     async def expression_changed(self, event=None):
         self.expression_note.value = ("Manual expression selected. A missing style reference uses a clearly reported neutral fallback."
